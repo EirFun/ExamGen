@@ -1,6 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$Destination)
 $ErrorActionPreference = 'Stop'
 New-Item -ItemType Directory -Force $Destination | Out-Null
+try {
 $names = @('msvcp140.dll','msvcp140_1.dll','msvcp140_2.dll','msvcp140_atomic_wait.dll','msvcp140_codecvt_ids.dll','vcruntime140.dll','vcruntime140_1.dll','concrt140.dll')
 $records = @()
 foreach ($name in $names) {
@@ -22,3 +23,9 @@ foreach ($name in $names) {
 $json = ConvertTo-Json -Depth 5 -InputObject @($records)
 [System.IO.File]::WriteAllText((Join-Path $Destination 'RUNTIME-SOURCES.json'), $json, [System.Text.UTF8Encoding]::new($false))
 Write-Host 'Verified current Microsoft x64 runtime files prepared.'
+
+} catch {
+    $message = $_.Exception.Message.Replace("%","%25").Replace("`r","%0D").Replace("`n","%0A")
+    Write-Host "::error title=Microsoft runtime preparation::$message"
+    throw
+}

@@ -48,6 +48,10 @@ def main():
         except Exception:
             log.flush();print((directory/'console.log').read_text(errors='replace'),file=sys.stderr);raise
         finally:
-            process.terminate();process.wait(timeout=10);log.close()
+            if os.name == 'nt':
+                subprocess.run(['taskkill','/PID',str(process.pid),'/T','/F'],capture_output=True)
+            else:
+                process.terminate()
+            process.wait(timeout=10);log.close()
 
 if __name__=='__main__':main()
