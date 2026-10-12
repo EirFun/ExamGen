@@ -8,6 +8,7 @@ import io
 import logging
 import sys
 import ctypes
+import tempfile
 import threading
 import time
 from contextlib import closing
@@ -108,11 +109,18 @@ def _recognize(payload, texts, candidates):
                 env['OMP_THREAD_LIMIT'] = '1'
                 env['OMP_NUM_THREADS'] = '1'
                 env['DOTPRODUCT'] = 'generic'
-                process = run_engine(
-                    [str(engine), 'stdin', 'stdout', '--tessdata-dir', 'tessdata', '-l', 'eng+ara', '--psm', '3'],
-                    input=image_bytes, cwd=str(ASSETS), timeout=min(45, remaining), env=env,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
-                )
+                # Native Windows Tesseract can crash while consuming large PNGs
+                # from stdin. Keep a file input, but pass only ASCII relative paths
+                # so non-ASCII Windows profile names remain supported.
+                with tempfile.TemporaryDirectory(prefix='ocr-input-', dir=ASSETS) as temporary:
+                    image_path = Path(temporary) / 'page.png'
+                    image_path.write_bytes(image_bytes)
+                    relative_image = image_path.relative_to(ASSETS).as_posix()
+                    process = run_engine(
+                        [str(engine), relative_image, 'stdout', '--tessdata-dir', 'tessdata', '-l', 'eng+ara', '--psm', '3'],
+                        input=None, cwd=str(ASSETS), timeout=min(45, remaining), env=env,
+                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
+                    )
             except subprocess.TimeoutExpired:
                 raise OCRError(f'OCR timed out on page {index + 1}. Try a clearer scan or split the PDF.') from None
             except OSError:

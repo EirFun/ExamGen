@@ -1,6 +1,8 @@
 """Expose native Windows test failures as GitHub annotations."""
 from pathlib import Path
 import xml.etree.ElementTree as ET
+import sys
+sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
 
 path=Path('build/native-results.xml')
 if path.exists():
