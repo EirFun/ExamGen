@@ -177,3 +177,26 @@ def test_ocr_missing_assets_and_timeout(client,monkeypatch,tmp_path):
     response=upload(client,'scan.pdf',document)
     assert response.status_code==422 and 'timed out on page 1' in response.json()['detail']
     assert not client.get('/api/analysis').json()['papers']
+
+def test_ocr_unicode_asset_directory(client,monkeypatch,tmp_path):
+    import ocr,shutil
+    assets=tmp_path/'مجلد عربي'/'ocr_assets'
+    shutil.copytree(ocr.ASSETS,assets)
+    monkeypatch.setattr(ocr,'ASSETS',assets)
+    document=scan_pdf(['Explain diabetic ketoacidosis and insulin treatment.'])
+    response=upload(client,'scan.pdf',document)
+    assert response.status_code==201,response.text
+    assert response.json()['ocr_pages']==1
+    assert client.get('/api/analysis').json()['topics'][0]['topic']=='Diabetes mellitus'
+
+
+def test_ocr_engine_language_error_is_not_reported_as_bad_scan(client,monkeypatch):
+    import ocr,subprocess
+    def failed_engine(*args,**kwargs):
+        return subprocess.CompletedProcess(args[0],1,b'',b"Failed loading language 'eng'\nCould not initialize tesseract.")
+    monkeypatch.setattr(ocr.subprocess,'run',failed_engine)
+    response=upload(client,'scan.pdf',scan_pdf(['Explain diabetic ketoacidosis and insulin treatment.']))
+    assert response.status_code==422
+    assert 'language files' in response.json()['detail']
+    assert 'clearer scan' not in response.json()['detail']
+    assert not client.get('/api/analysis').json()['papers']

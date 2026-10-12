@@ -48,3 +48,5 @@ To rebuild on Windows, install Python 3.13 (64-bit) and run `packaging/build-win
 For a source-level launcher smoke check, run `.venv/bin/python desktop.py --no-browser --port 8766 --data-dir /tmp/examgen-desktop-smoke`. Keep test data separate from your real library.
 
 OCR-extracted Arabic text is matched against included Arabic synonyms for the clinical topics; mock questions and explanations remain in English. Original image PDFs are not retained. OCR assets are generated under ignored `ocr_assets/`; `packaging/prepare_ocr_assets.py` verifies every download against a pinned SHA-256.
+
+Windows OCR passes rendered page images through standard input and uses relative model paths, so Arabic and other non-ASCII Windows profile/folder names are supported. Engine failures are reported separately from unreadable scans; diagnostic details appear in the ExamGen console. OCR extracts text only: questions that ask you to identify photographs, equipment or diagrams still require image interpretation, and may not match the supported topic keywords.

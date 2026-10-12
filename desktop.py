@@ -19,6 +19,11 @@ def data_directory():
 
 
 def main():
+    # Redirected or legacy Windows consoles may not support the user's folder name.
+    # Logging must never prevent the server from starting.
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None and hasattr(stream, 'reconfigure'):
+            stream.reconfigure(errors='backslashreplace')
     parser = argparse.ArgumentParser(description='Run the ExamGen desktop application.')
     parser.add_argument('--no-browser', action='store_true', help='Do not open a browser automatically.')
     parser.add_argument('--port', type=int, default=0, help='Local port; 0 chooses a free port automatically.')
@@ -76,5 +81,8 @@ if __name__ == '__main__':
         except OSError:
             pass
         if sys.stdin and sys.stdin.isatty():
-            input('Press Enter to close...')
+            try:
+                input('Press Enter to close...')
+            except EOFError:
+                pass
         sys.exit(1)

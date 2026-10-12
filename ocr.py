@@ -4,7 +4,8 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
+import io
+import logging
 import threading
 import time
 from contextlib import closing
@@ -35,8 +36,7 @@ def _recognize(payload, texts, candidates):
     output = list(texts)
     recognized = 0
     started = time.monotonic()
-    with pdfium.PdfDocument(payload) as document, tempfile.TemporaryDirectory(prefix='examgen-ocr-') as temporary:
-        image_path = Path(temporary) / 'page.png'
+    with pdfium.PdfDocument(payload) as document:
         for index in candidates:
             with closing(document[index]) as page:
                 width, height = page.get_size()
@@ -48,7 +48,9 @@ def _recognize(payload, texts, candidates):
                     try:
                         if image.getextrema()[0] > 245:  # Blank pages do not need an OCR process.
                             continue
-                        image.save(image_path)
+                        png = io.BytesIO()
+                        image.save(png, format='PNG')
+                        image_bytes = png.getvalue()
                     finally:
                         image.close()
             if not engine or not Path(engine).is_file():
@@ -62,8 +64,8 @@ def _recognize(payload, texts, candidates):
                 env = os.environ.copy()
                 env['OMP_THREAD_LIMIT'] = '2'
                 process = subprocess.run(
-                    [str(engine), str(image_path), 'stdout', '--tessdata-dir', str(ASSETS / 'tessdata'), '-l', 'eng+ara', '--psm', '3'],
-                    capture_output=True, timeout=min(45, remaining), env=env,
+                    [str(engine), 'stdin', 'stdout', '--tessdata-dir', 'tessdata', '-l', 'eng+ara', '--psm', '3'],
+                    input=image_bytes, cwd=str(ASSETS), capture_output=True, timeout=min(45, remaining), env=env,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
                 )
             except subprocess.TimeoutExpired:
@@ -71,7 +73,13 @@ def _recognize(payload, texts, candidates):
             except OSError:
                 raise OCRError('Could not start the OCR engine. Use the latest Windows build or check your Tesseract installation.') from None
             if process.returncode:
-                raise OCRError(f'OCR could not read page {index + 1}. Try a clearer scan or a newly exported PDF.')
+                details = process.stderr.decode('utf-8', errors='replace').strip()
+                logging.getLogger(__name__).error('OCR engine failed on page %s (exit %s): %s', index + 1, process.returncode, details[:2000])
+                if 'Failed loading language' in details or 'Could not initialize tesseract' in details:
+                    raise OCRError('OCR could not load its language files. Download the latest Windows build; your PDF may be readable.')
+                if process.returncode < 0 or process.returncode >= 0x80000000:
+                    raise OCRError('The Windows OCR engine could not start. Download the latest build; see the ExamGen window for the error code.')
+                raise OCRError(f'The OCR engine failed on page {index + 1}. See the ExamGen window for details; this does not necessarily mean the scan is unreadable.')
             text = process.stdout.decode('utf-8', errors='replace').strip()
             if len(re.sub(r'\W', '', text)) > len(re.sub(r'\W', '', texts[index])):
                 output[index] = text
