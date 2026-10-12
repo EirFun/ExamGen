@@ -12,7 +12,7 @@ import app as module
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(module, 'DB', tmp_path / 'test.sqlite3')
     with module.connect() as db:
-        db.execute('CREATE TABLE papers (id TEXT PRIMARY KEY, digest TEXT UNIQUE, name TEXT, pages INTEGER, extracted TEXT, created TEXT)')
+        db.execute('CREATE TABLE papers (id TEXT PRIMARY KEY, digest TEXT UNIQUE, name TEXT, pages INTEGER, extracted TEXT, created TEXT, ocr_pages INTEGER NOT NULL DEFAULT 0)')
         db.execute('CREATE TABLE exams (id TEXT PRIMARY KEY, questions TEXT, created TEXT)')
     with TestClient(module.app) as client:
         yield client
@@ -114,3 +114,66 @@ def test_recurring_question_passages_count_distinct_papers(client):
     assert groups[0]['occurrences'] == 3
     assert groups[0]['topics'] == ['Diabetes mellitus']
     assert len(groups[0]['sources']) == 3
+
+def scan_pdf(lines, native_first=False):
+    from PIL import Image, ImageDraw, ImageFont
+    from reportlab.lib.utils import ImageReader
+    image = Image.new('RGB', (1600, 1800), 'white')
+    font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    if not __import__('pathlib').Path(font_path).exists():
+        pytest.skip('OCR fixture requires DejaVuSans for English and Arabic rendering')
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.truetype(font_path, 38)
+    for i, line in enumerate(lines):
+        if any('\u0600' <= c <= '\u06ff' for c in line):
+            draw.text((1500, 150 + i * 80), line, font=font, fill='black', anchor='ra', direction='rtl', language='ar')
+        else:
+            draw.text((70, 150 + i * 80), line, font=font, fill='black')
+    output=io.BytesIO(); document=canvas.Canvas(output, pagesize=(600,700))
+    if native_first:
+        document.drawString(40,600,'1. Explain myocardial infarction and troponin in detail.')
+        document.showPage()
+    document.drawImage(ImageReader(image),0,0,width=600,height=700)
+    document.showPage();document.save();image.close()
+    return output.getvalue()
+
+
+def test_actual_scanned_and_mixed_pdf_ocr(client):
+    document=scan_pdf(['1. Explain diabetic ketoacidosis and insulin treatment.', '2. Describe asthma and bronchodilator treatment.'], native_first=True)
+    response=upload(client,'mixed-scan.pdf',document)
+    assert response.status_code==201, response.text
+    assert response.json()['ocr_pages']==1
+    analysis=client.get('/api/analysis').json()
+    assert analysis['papers'][0]['ocr_pages']==1
+    assert {'Diabetes mellitus','Asthma','Acute coronary syndrome'} <= {t['topic'] for t in analysis['topics']}
+    diabetes=next(t for t in analysis['topics'] if t['topic']=='Diabetes mellitus')
+    assert diabetes['sources'][0]['page']==2
+    assert 'insulin' in diabetes['sources'][0]['excerpt'].lower()
+    exam=client.post('/api/exams',json={'topics':['Diabetes mellitus'],'count':5}).json()
+    assert exam['actual']==2
+
+
+def test_actual_arabic_ocr_and_topic_matching(client):
+    document=scan_pdf(['السؤال الأول: اشرح مرض السكري وعلاج الأنسولين', 'السؤال الثاني: تشخيص الربو وعلاجه'])
+    response=upload(client,'arabic-scan.pdf',document)
+    assert response.status_code==201, response.text
+    assert response.json()['ocr_pages']==1
+    topics={t['topic'] for t in client.get('/api/analysis').json()['topics']}
+    assert 'Diabetes mellitus' in topics
+    assert 'Asthma' in topics
+
+
+def test_ocr_missing_assets_and_timeout(client,monkeypatch,tmp_path):
+    import ocr
+    document=scan_pdf(['Explain diabetic ketoacidosis and insulin treatment.'])
+    monkeypatch.setattr(ocr,'ASSETS',tmp_path)
+    response=upload(client,'scan.pdf',document)
+    assert response.status_code==422 and 'language files are missing' in response.json()['detail']
+    assert not client.get('/api/analysis').json()['papers']
+    monkeypatch.setattr(ocr,'ASSETS',ocr.ROOT/'ocr_assets')
+    def timeout(*args,**kwargs):
+        raise __import__('subprocess').TimeoutExpired('tesseract',45)
+    monkeypatch.setattr(ocr.subprocess,'run',timeout)
+    response=upload(client,'scan.pdf',document)
+    assert response.status_code==422 and 'timed out on page 1' in response.json()['detail']
+    assert not client.get('/api/analysis').json()['papers']

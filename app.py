@@ -13,6 +13,8 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
+from ocr import recognize_pdf_pages, OCRError
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 from bank import TOPICS, QUESTIONS
@@ -29,6 +31,8 @@ def connect():
 
 with connect() as db:
     db.execute('CREATE TABLE IF NOT EXISTS papers (id TEXT PRIMARY KEY, digest TEXT UNIQUE, name TEXT, pages INTEGER, extracted TEXT, created TEXT)')
+    if 'ocr_pages' not in {row['name'] for row in db.execute('PRAGMA table_info(papers)')}:
+        db.execute('ALTER TABLE papers ADD COLUMN ocr_pages INTEGER NOT NULL DEFAULT 0')
     db.execute('CREATE TABLE IF NOT EXISTS exams (id TEXT PRIMARY KEY, questions TEXT, created TEXT)')
 
 app = FastAPI(title='ExamGen', version='1.0.0')
@@ -45,7 +49,7 @@ def health():
     return {'status': 'ok', 'question_bank_size': len(QUESTIONS)}
 
 def normalize(text):
-    return re.sub(r'[^a-z0-9]+', ' ', text.lower()).strip()
+    return re.sub(r'[^\w]+', ' ', text.lower()).strip()
 
 def topics_for(text):
     clean = ' ' + normalize(text) + ' '
@@ -82,14 +86,20 @@ async def upload(file: UploadFile = File(...)):
         raise
     except Exception:
         raise HTTPException(400, 'Could not read this PDF. Try exporting a new copy.')
+    try:
+        extracted, ocr_count = await run_in_threadpool(recognize_pdf_pages, payload, extracted)
+    except OCRError as error:
+        raise HTTPException(422, str(error)) from None
+    except Exception:
+        raise HTTPException(400, 'Could not render this PDF for OCR. Try exporting a new copy.') from None
     if sum(len(t.strip()) for t in extracted) < 30:
-        raise HTTPException(422, 'No readable text found. This may be a scanned PDF; run OCR before uploading.')
+        raise HTTPException(422, 'No readable text found after OCR. The PDF may be blank or the scan too unclear.')
     if sum(map(len, extracted)) > 2_000_000:
         raise HTTPException(400, 'PDF contains too much text. Please split it into smaller papers.')
     paper_id = uuid.uuid4().hex
     with connect() as db:
-        db.execute('INSERT INTO papers VALUES (?,?,?,?,?,?)', (paper_id, digest, Path(file.filename).name[:180], len(extracted), json.dumps(extracted), datetime.now(timezone.utc).isoformat()))
-    return {'id': paper_id, 'name': Path(file.filename).name, 'pages': len(extracted)}
+        db.execute('INSERT INTO papers (id,digest,name,pages,extracted,created,ocr_pages) VALUES (?,?,?,?,?,?,?)', (paper_id, digest, Path(file.filename).name[:180], len(extracted), json.dumps(extracted), datetime.now(timezone.utc).isoformat(), ocr_count))
+    return {'id': paper_id, 'name': Path(file.filename).name, 'pages': len(extracted), 'ocr_pages': ocr_count}
 
 @app.get('/api/analysis')
 def analysis():
@@ -125,7 +135,7 @@ def analysis():
                     row['paper_ids'].add(paper['id'])
                     if len(row['sources']) < 8:
                         row['sources'].append({'paper': paper['name'], 'page': page_number, 'excerpt': block[:650]})
-        library.append({'id': paper['id'], 'name': paper['name'], 'pages': paper['pages'], 'created': paper['created'], 'topics': len(paper_topics), 'matched_passages': matches})
+        library.append({'id': paper['id'], 'name': paper['name'], 'pages': paper['pages'], 'created': paper['created'], 'topics': len(paper_topics), 'matched_passages': matches, 'ocr_pages': paper['ocr_pages']})
     result = []
     for row in stats.values():
         count = len(row.pop('paper_ids'))

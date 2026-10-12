@@ -6,3 +6,4 @@ data/
 build/
 dist/
 .venv-build/
+ocr_assets/

@@ -17,6 +17,22 @@ TOPICS = {
  'Sepsis': ('Infectious disease', ['sepsis', 'septic shock', 'lactate', 'bacteremia']),
  'Tuberculosis': ('Infectious disease', ['tuberculosis', 'mycobacterium', 'acid fast', 'night sweats']),
 }
+ARABIC_TERMS = {
+ 'Acute coronary syndrome': ['احتشاء عضلة القلب', 'ألم الصدر', 'تروبونين'],
+ 'Heart failure': ['قصور القلب', 'فشل القلب'],
+ 'Diabetes mellitus': ['السكري', 'السكرى', 'الأنسولين', 'الانسولين', 'الحماض الكيتوني'],
+ 'Thyroid disorders': ['الغدة الدرقية', 'فرط الدرقية', 'قصور الدرقية'],
+ 'Asthma': ['الربو'], 'Pulmonary embolism': ['الانصمام الرئوي', 'الجلطة الرئوية'],
+ 'Acute kidney injury': ['الفشل الكلوي', 'إصابة الكلى', 'الكرياتينين'],
+ 'Electrolyte disorders': ['البوتاسيوم', 'الصوديوم'], 'Stroke': ['السكتة الدماغية'],
+ 'Meningitis': ['التهاب السحايا'], 'Anemia': ['فقر الدم', 'الأنيميا'],
+ 'Peptic ulcer disease': ['القرحة الهضمية', 'القرحة المعدية'],
+ 'Appendicitis': ['التهاب الزائدة'], 'Preeclampsia': ['تسمم الحمل'],
+ 'Sepsis': ['الإنتان', 'الانتان', 'تعفن الدم'], 'Tuberculosis': ['السل'],
+}
+for topic, terms in ARABIC_TERMS.items():
+    TOPICS[topic][1].extend(terms)
+
 # topic, vignette, options (correct first), explanation
 ROWS = [
 ('Acute coronary syndrome','A patient has crushing chest pain and ST elevation in leads II, III and aVF. Which territory is affected?',['Inferior wall','Anterior wall','Lateral wall','Septal wall'],'Leads II, III and aVF view the inferior wall. The right coronary artery commonly supplies this territory; coronary dominance can vary.'),

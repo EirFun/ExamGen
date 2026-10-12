@@ -28,7 +28,7 @@ async function refresh() {
   $('#stat-passages').textContent = state.matched_passages;
   $('#nav-count').textContent = state.papers.length;
   $('#paper-total').textContent = `${state.papers.length} paper${state.papers.length === 1 ? '' : 's'}`;
-  $('#paper-list').innerHTML = state.papers.length ? state.papers.map(p => `<div class="paper-row"><span class="file-icon">PDF</span><div class="paper-info"><strong>${esc(p.name)}</strong><small>${p.pages} pages · ${p.topics} topics · ${p.matched_passages} matching passages</small></div><button class="delete" data-delete="${p.id}" aria-label="Delete ${esc(p.name)}">Remove</button></div>`).join('') : empty('▤', 'Your library starts here', 'Upload a past paper to begin building your study map.');
+  $('#paper-list').innerHTML = state.papers.length ? state.papers.map(p => `<div class="paper-row"><span class="file-icon">PDF</span><div class="paper-info"><strong>${esc(p.name)}</strong><small>${p.pages} pages${p.ocr_pages ? ` · OCR: ${p.ocr_pages} pages` : ""} · ${p.topics} topics · ${p.matched_passages} matching passages</small></div><button class="delete" data-delete="${p.id}" aria-label="Delete ${esc(p.name)}">Remove</button></div>`).join('') : empty('▤', 'Your library starts here', 'Upload a past paper to begin building your study map.');
   document.querySelectorAll('[data-delete]').forEach(b => b.onclick = async () => {
     if (!confirm('Remove this paper and its topic evidence?')) return;
     b.disabled = true;
@@ -61,7 +61,7 @@ async function uploadFiles(files) {
   uploading = true; $('#pdf-input').disabled = true;
   const errors = []; let added = 0;
   for (const [i,file] of files.entries()) {
-    notify(`Reading ${file.name} (${i+1} of ${files.length})…`);
+    notify(`Reading ${file.name} (${i+1} of ${files.length})… Scanned pages are recognized automatically; this can take a few minutes.`);
     if (file.size > 20 * 1024 * 1024) { errors.push(`${file.name}: exceeds 20 MB.`); continue; }
     const form = new FormData(); form.append('file',file);
     try { await api('/papers',{method:'POST',body:form}); added++; } catch(e) { errors.push(`${file.name}: ${e.message}`); }
