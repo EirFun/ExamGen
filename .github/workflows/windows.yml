@@ -1,0 +1,44 @@
+name: Windows build and OCR checks
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.py'
+      - 'requirements*.txt'
+      - 'packaging/**'
+      - 'tests/**'
+      - 'static/**'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install test and build dependencies
+        run: python -m pip install -r requirements-dev.txt -r requirements-windows-build.txt
+      - name: Prepare verified offline OCR assets
+        run: python packaging/prepare_ocr_assets.py
+      - name: Test the application and OCR
+        run: python -m pytest -q
+      - name: Build Windows executable
+        shell: pwsh
+        run: |
+          $staticPath = Join-Path (Get-Location) 'static'
+          $ocrPath = Join-Path (Get-Location) 'ocr_assets'
+          python -m PyInstaller --clean --noconfirm --onefile --console --name ExamGen --add-data "${staticPath};static" --add-data "${ocrPath};ocr_assets" --distpath dist/windows --workpath build/windows --specpath build desktop.py
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
+      - name: Test the packaged executable on Windows
+        run: python packaging/smoke_windows_exe.py dist/windows/ExamGen.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ExamGen-native-Windows-x64
+          path: |
+            dist/windows/ExamGen.exe
+            packaging/WINDOWS-README.txt

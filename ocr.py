@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import io
 import logging
+import sys
+import ctypes
 import threading
 import time
 from contextlib import closing
@@ -17,6 +19,47 @@ _LOCK = threading.Lock()
 class OCRError(Exception):
     pass
 
+
+
+def run_engine(command, *, input, cwd, env, timeout, creationflags):
+    """Avoid inheriting PyInstaller's altered Windows DLL search path."""
+    if os.name != 'nt':
+        return subprocess.run(command, input=input, cwd=cwd, env=env,
+                              timeout=timeout, creationflags=creationflags, capture_output=True)
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    get_directory = kernel.GetDllDirectoryW
+    get_directory.argtypes = [ctypes.c_uint32, ctypes.c_wchar_p]
+    get_directory.restype = ctypes.c_uint32
+    set_directory = kernel.SetDllDirectoryW
+    set_directory.argtypes = [ctypes.c_wchar_p]
+    set_directory.restype = ctypes.c_int
+    length = get_directory(0, None)
+    buffer = ctypes.create_unicode_buffer(length + 1)
+    if length:
+        get_directory(len(buffer), buffer)
+    previous = buffer.value or None
+    child_env = env.copy()
+    bundle = getattr(sys, '_MEIPASS', None)
+    if bundle:
+        prefix = os.path.normcase(os.path.abspath(bundle))
+        child_env['PATH'] = os.pathsep.join(part for part in child_env.get('PATH', '').split(os.pathsep)
+            if part and not (os.path.normcase(os.path.abspath(part)) == prefix or
+                             os.path.normcase(os.path.abspath(part)).startswith(prefix + os.sep)))
+    if not set_directory(None):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, cwd=cwd, env=child_env, creationflags=creationflags)
+    finally:
+        if not set_directory(previous):
+            logging.getLogger(__name__).error('Could not restore the Windows DLL search path.')
+    try:
+        stdout, stderr = process.communicate(input=input, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.communicate()
+        raise
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 def recognize_pdf_pages(payload: bytes, texts: list[str]) -> tuple[list[str], int]:
     candidates = [i for i, text in enumerate(texts) if len(re.sub(r'\W', '', text)) < 30]
@@ -53,19 +96,21 @@ def _recognize(payload, texts, candidates):
                         image_bytes = png.getvalue()
                     finally:
                         image.close()
-            if not engine or not Path(engine).is_file():
-                raise OCRError('OCR engine is missing. Install Tesseract or download the current Windows OCR build.')
             if not all((ASSETS / 'tessdata' / f'{language}.traineddata').is_file() for language in ('eng', 'ara')):
                 raise OCRError('OCR language files are missing. Run packaging/prepare_ocr_assets.py or use the current Windows build.')
+            if not engine or not Path(engine).is_file():
+                raise OCRError('OCR engine is missing. Install Tesseract or download the current Windows OCR build.')
             remaining = 240 - (time.monotonic() - started)
             if remaining <= 0:
                 raise OCRError('OCR took too long. Split this paper into smaller PDFs and retry.')
             try:
                 env = os.environ.copy()
-                env['OMP_THREAD_LIMIT'] = '2'
-                process = subprocess.run(
+                env['OMP_THREAD_LIMIT'] = '1'
+                env['OMP_NUM_THREADS'] = '1'
+                env['DOTPRODUCT'] = 'generic'
+                process = run_engine(
                     [str(engine), 'stdin', 'stdout', '--tessdata-dir', 'tessdata', '-l', 'eng+ara', '--psm', '3'],
-                    input=image_bytes, cwd=str(ASSETS), capture_output=True, timeout=min(45, remaining), env=env,
+                    input=image_bytes, cwd=str(ASSETS), timeout=min(45, remaining), env=env,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
                 )
             except subprocess.TimeoutExpired:
@@ -78,7 +123,7 @@ def _recognize(payload, texts, candidates):
                 if 'Failed loading language' in details or 'Could not initialize tesseract' in details:
                     raise OCRError('OCR could not load its language files. Download the latest Windows build; your PDF may be readable.')
                 if process.returncode < 0 or process.returncode >= 0x80000000:
-                    raise OCRError('The Windows OCR engine could not start. Download the latest build; see the ExamGen window for the error code.')
+                    raise OCRError(f'The OCR engine crashed (Windows code 0x{process.returncode & 0xFFFFFFFF:08X}). See the ExamGen console for details; the PDF may still be readable.')
                 raise OCRError(f'The OCR engine failed on page {index + 1}. See the ExamGen window for details; this does not necessarily mean the scan is unreadable.')
             text = process.stdout.decode('utf-8', errors='replace').strip()
             if len(re.sub(r'\W', '', text)) > len(re.sub(r'\W', '', texts[index])):

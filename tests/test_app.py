@@ -119,7 +119,7 @@ def scan_pdf(lines, native_first=False):
     from PIL import Image, ImageDraw, ImageFont
     from reportlab.lib.utils import ImageReader
     image = Image.new('RGB', (1600, 1800), 'white')
-    font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    font_path = str(__import__('pathlib').Path(__file__).with_name('fonts') / 'DejaVuSans.ttf')
     if not __import__('pathlib').Path(font_path).exists():
         pytest.skip('OCR fixture requires DejaVuSans for English and Arabic rendering')
     draw = ImageDraw.Draw(image)
@@ -173,7 +173,7 @@ def test_ocr_missing_assets_and_timeout(client,monkeypatch,tmp_path):
     monkeypatch.setattr(ocr,'ASSETS',ocr.ROOT/'ocr_assets')
     def timeout(*args,**kwargs):
         raise __import__('subprocess').TimeoutExpired('tesseract',45)
-    monkeypatch.setattr(ocr.subprocess,'run',timeout)
+    monkeypatch.setattr(ocr,'run_engine',timeout)
     response=upload(client,'scan.pdf',document)
     assert response.status_code==422 and 'timed out on page 1' in response.json()['detail']
     assert not client.get('/api/analysis').json()['papers']
@@ -194,7 +194,7 @@ def test_ocr_engine_language_error_is_not_reported_as_bad_scan(client,monkeypatc
     import ocr,subprocess
     def failed_engine(*args,**kwargs):
         return subprocess.CompletedProcess(args[0],1,b'',b"Failed loading language 'eng'\nCould not initialize tesseract.")
-    monkeypatch.setattr(ocr.subprocess,'run',failed_engine)
+    monkeypatch.setattr(ocr,'run_engine',failed_engine)
     response=upload(client,'scan.pdf',scan_pdf(['Explain diabetic ketoacidosis and insulin treatment.']))
     assert response.status_code==422
     assert 'language files' in response.json()['detail']
