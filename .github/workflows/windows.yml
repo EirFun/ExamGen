@@ -26,7 +26,10 @@ jobs:
       - name: Prepare verified offline OCR assets
         run: python packaging/prepare_ocr_assets.py
       - name: Test the application and OCR
-        run: python -m pytest -q
+        run: python -m pytest -q --junitxml=build/native-results.xml
+      - name: Report native test failures
+        if: always()
+        run: python packaging/report_native_tests.py
       - name: Build Windows executable
         shell: pwsh
         run: |
