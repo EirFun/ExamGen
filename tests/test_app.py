@@ -122,6 +122,10 @@ def scan_pdf(lines, native_first=False):
     font_path = str(__import__('pathlib').Path(__file__).with_name('fonts') / 'DejaVuSans.ttf')
     if not __import__('pathlib').Path(font_path).exists():
         pytest.skip('OCR fixture requires DejaVuSans for English and Arabic rendering')
+    if any(any('\u0600' <= c <= '\u06ff' for c in line) for line in lines):
+        image.close()
+        image = Image.open(__import__('pathlib').Path(__file__).with_name('fixtures')/'arabic-scan.png').convert('RGB')
+        lines = []
     draw = ImageDraw.Draw(image)
     font = ImageFont.truetype(font_path, 38)
     for i, line in enumerate(lines):

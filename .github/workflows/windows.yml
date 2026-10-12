@@ -11,7 +11,7 @@ on:
       - '.github/workflows/windows.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   windows:
     runs-on: windows-latest
@@ -39,9 +39,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
       - name: Test the packaged executable on Windows
         run: python packaging/smoke_windows_exe.py dist/windows/ExamGen.exe
+      - name: Package tested native Windows build
+        run: python packaging/package_windows.py dist/windows/ExamGen.exe downloads/ExamGen-Windows-x64.zip
+      - name: Save the tested build on its own branch
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add downloads/ExamGen-Windows-x64.zip downloads/SHA256SUMS.txt
+          git commit -m 'Package verified native Windows executable'
+          if ($LASTEXITCODE -ne 0) { throw 'Artifact commit failed.' }
+          git push origin "HEAD:refs/heads/windows-builds/$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if ($LASTEXITCODE -ne 0) { throw 'Artifact branch push failed.' }
       - uses: actions/upload-artifact@v4
         with:
           name: ExamGen-native-Windows-x64
-          path: |
-            dist/windows/ExamGen.exe
-            packaging/WINDOWS-README.txt
+          path: downloads/ExamGen-Windows-x64.zip

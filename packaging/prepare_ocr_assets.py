@@ -5,12 +5,20 @@ import io
 import json
 import urllib.request
 import zipfile
+import os
+import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent / 'ocr_assets'
-SOURCES = [{'url': 'https://api.nuget.org/v3-flatcontainer/tesseractocr/5.5.2/tesseractocr.5.5.2.nupkg', 'sha256': '2d11e0a45f8f5887d91277dd61e4b2b57423be0e06aefba432484ebc33a8a794'}, {'url': 'https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata', 'sha256': '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2'}, {'url': 'https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/ara.traineddata', 'sha256': 'e3206d3dc87fd50c24a0fb9f01838615911d25168f4e64415244b67d2bb3e729'}, {'url': 'https://api.nuget.org/v3-flatcontainer/vclibs.vcruntime.140/1.0.4/vclibs.vcruntime.140.1.0.4.nupkg', 'sha256': 'ea8fad02d8de9ca1ab4e1d20c282166b3386adf91a9b143019d59507229ea375'}]
+SOURCES = [{'url': 'https://api.nuget.org/v3-flatcontainer/tesseractocr/5.5.2/tesseractocr.5.5.2.nupkg', 'sha256': '2d11e0a45f8f5887d91277dd61e4b2b57423be0e06aefba432484ebc33a8a794'}, {'url': 'https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata', 'sha256': '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2'}, {'url': 'https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/ara.traineddata', 'sha256': 'e3206d3dc87fd50c24a0fb9f01838615911d25168f4e64415244b67d2bb3e729'}]
 
 def main():
     ROOT.mkdir(exist_ok=True)
+    windows = ROOT / 'windows'
+    windows.mkdir(exist_ok=True)
+    # Remove the obsolete generated runtime (14.29); never package it again.
+    for pattern in ('msvcp140*.dll', 'vcruntime140*.dll', 'concrt140.dll'):
+        for old in windows.glob(pattern):
+            old.unlink()
     for source in SOURCES:
         with urllib.request.urlopen(source['url'], timeout=90) as response:
             data = response.read()
@@ -27,7 +35,11 @@ def main():
                         target = ROOT / 'windows' / Path(name).name
                         target.parent.mkdir(exist_ok=True)
                         target.write_bytes(archive.read(name))
-    (ROOT / 'SOURCES.json').write_text(json.dumps(SOURCES, indent=2))
+    provenance = list(SOURCES)
+    if os.name == 'nt':
+        subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-File', str(Path(__file__).with_name('prepare_msvc_runtime.ps1')), '-Destination', str(windows)], check=True)
+        provenance.append({'microsoft_runtime': json.loads((windows / 'RUNTIME-SOURCES.json').read_text(encoding='utf-8-sig'))})
+    (ROOT / 'SOURCES.json').write_text(json.dumps(provenance, indent=2))
     print('Offline English + Arabic OCR assets verified and prepared.')
 
 if __name__ == '__main__':
