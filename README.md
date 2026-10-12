@@ -4,7 +4,7 @@ A local medical-school past-paper analyzer and mock exam studio. No API key or e
 
 ## Windows download
 
-[Download ExamGen for Windows (64-bit Windows 10/11)](https://github.com/EirFun/ExamGen/raw/refs/heads/main/downloads/ExamGen-Windows-x64.zip). Extract the ZIP and double-click **ExamGen.exe**. No Python installation is required. Keep the ExamGen console window open while using the app. This build is unsigned and may trigger a Windows publisher warning. The executable was functionally tested under Wine, including scanned English/Arabic uploads and restart persistence; it has not been tested on a physical Windows machine.
+[Download ExamGen for Windows (64-bit Windows 10/11)](https://github.com/EirFun/ExamGen/raw/refs/heads/main/downloads/ExamGen-Windows-x64.zip). Extract the ZIP and double-click **ExamGen.exe**. No Python installation is required. Keep the ExamGen console window open while using the app. This build is unsigned and may trigger a Windows publisher warning. Build provenance and validation details are included in BUILD-INFO.json inside the download. Native Windows CI tests the OCR pipeline and packaged executable before publishing a build.
 
 ## Run from source
 
@@ -43,7 +43,7 @@ The interface works without remote assets; it uses local system-font fallbacks. 
 
 The committed Windows x64 distribution is `downloads/ExamGen-Windows-x64.zip`; rebuilding produces `dist/windows/ExamGen.exe`. Extract it and double-click `ExamGen.exe`. Python is bundled, so users do not need to install Python. The launcher opens the local application in the default browser, binds only to loopback on a free port, and keeps a console open until stopped. Paper data persists under `%LOCALAPPDATA%\ExamGen` across executable updates. Closing the console stops the app; closing the browser alone does not.
 
-To rebuild on Windows, install Python 3.13 (64-bit) and run `packaging/build-windows.ps1` in PowerShell. Dependencies are pinned in `requirements-windows-build.txt`. The build script downloads checksum-pinned Tesseract binaries, runtime libraries, and English/Arabic models, then bundles them inside the executable. PyInstaller packages the static interface and backend into one executable. This build is unsigned. See `packaging/WINDOWS-README.txt` for usage and diagnostics.
+To rebuild on Windows, install Python 3.13 (64-bit) and the current Microsoft Visual C++ x64 Redistributable (runtime 14.43 or newer) and run `packaging/build-windows.ps1` in PowerShell. Dependencies are pinned in `requirements-windows-build.txt`. The build script downloads checksum-pinned Tesseract binaries, runtime libraries, and English/Arabic models, then bundles them inside the executable. PyInstaller packages the static interface and backend into one executable. This build is unsigned. See `packaging/WINDOWS-README.txt` for usage and diagnostics.
 
 For a source-level launcher smoke check, run `.venv/bin/python desktop.py --no-browser --port 8766 --data-dir /tmp/examgen-desktop-smoke`. Keep test data separate from your real library.
 
@@ -52,3 +52,5 @@ OCR-extracted Arabic text is matched against included Arabic synonyms for the cl
 Windows OCR uses temporary PNG files with ASCII relative filenames and relative model paths, so Arabic and other non-ASCII Windows profile/folder names are supported. Engine failures are reported separately from unreadable scans; diagnostic details appear in the ExamGen console. OCR extracts text only: questions that ask you to identify photographs, equipment or diagrams still require image interpretation, and may not match the supported topic keywords.
 
 The Windows OCR child process runs with an isolated DLL search path, one processing thread, and generic dot-product routines for CPU compatibility. Native Windows CI tests both real image scans and the packaged executable under Arabic temporary/data paths.
+
+Windows builds select current Microsoft C++ runtime DLLs from Windows or Visual Studio redistributable locations only after Authenticode signature and minimum-version verification. Successful CI builds are saved to unique `windows-builds/<run-id>-<attempt>` branches; ordinary source remains on `main`. This allows the tested native binary to be retrieved without altering source history automatically.
