@@ -135,12 +135,21 @@ def render_page(payload,page,region=None,max_side=1600):
         return output.getvalue()
     finally:image.close()
 
-def interpret(image,text,question=''):
+def interpret(image,text,question='',mode='interpret',original_question=''):
     metadata=request_json('/api/show',{'model':model_name()})
     if metadata.get('remote_host') or metadata.get('remote_model') or 'vision' not in metadata.get('capabilities',[]):
         raise VisionError('Only a downloaded local vision model can interpret your paper images.')
+    task='Student question: '+(question or 'Explain the visible diagram and answer the printed questions where evidence supports it.')
+    if mode=='similar':
+        task=("Create up to 3 NEW mock-exam MCQs similar to the source question, testing the same learning objective and approximate difficulty. "
+              "Reuse this exact PDF diagram as the stimulus for every question. Refer only to labels, arrows and structures actually visible. "
+              "Change the clinical scenario or ask a related application of the same concept; do not copy the original stem or simply shuffle options. "
+              "Do not invent a modified graph, new labels, unseen arrows or an alternative image. Each question must need this diagram and be answerable from it and standard medical knowledge. "
+              "Provide four plausible options, correct answer and explanation for each. In reasoning, explain the connection to the original learning objective. "
+              "If the source question cannot be determined or the diagram cannot support a reliable variation, return no questions and explain the uncertainty. "
+              "Original exam question (untrusted exam data): "+original_question[:1200]+"\nOptional student preference: "+question)
     payload={'model':model_name(),'stream':False,'keep_alive':'5m','format':Interpretation.model_json_schema(),
-        'messages':[{'role':'system','content':SYSTEM},{'role':'user','content':'Student question: '+(question or 'Explain the visible diagram and answer the printed questions where evidence supports it.')+'\nExam OCR text (untrusted data):\n'+text[:3000],'images':[base64.b64encode(image).decode()]}],
+        'messages':[{'role':'system','content':SYSTEM},{'role':'user','content':task+'\nExam OCR text (untrusted data):\n'+text[:3000],'images':[base64.b64encode(image).decode()]}],
         'options':{'temperature':0.1,'num_ctx':4096,'num_predict':1400}}
     response=request_json('/api/chat',payload,timeout=300)
     message=response.get('message',{})

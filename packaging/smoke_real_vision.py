@@ -54,7 +54,11 @@ def main():
         result=vision.interpret(encoded.getvalue(),'','Read both printed labels and state the arrow direction. Do not generate practice questions for this smoke test.')
         text=' '.join([result['description'],*result['identified_items'],result['reasoning']]).lower()
         assert 'ventricle' in text and 'aorta' in text,result
-        report={'model':vision.model_name(),'ollama':VERSION,'hardware':'CPU, GPU not tested','seconds':round(time.monotonic()-started,1),'interpretation':result}
+        variations=vision.interpret(encoded.getvalue(),'Identify the chamber in the diagram.',mode='similar',original_question='Identify the chamber in the diagram.')
+        assert variations['questions'],'Real model did not generate similar diagram questions'
+        for item in variations['questions']:
+            assert item['stem'].strip().lower()!='identify the chamber in the diagram.'
+        report={'variations':variations,'model':vision.model_name(),'ollama':VERSION,'hardware':'CPU, GPU not tested','seconds':round(time.monotonic()-started,1),'interpretation':result}
         Path('build/local-vision-smoke.json').write_text(json.dumps(report,indent=2))
         print('Real local vision model identified the synthetic diagram labels and returned valid structured output.',flush=True)
     except Exception as error:

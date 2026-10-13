@@ -164,3 +164,21 @@ def test_diagram_without_readable_text_is_kept(client,monkeypatch):
 def test_local_transport_rejects_redirects():
     with pytest.raises(vision.VisionError):
         vision.LocalOnlyRedirect().redirect_request(None,None,307,'Redirect',{},'https://external.example')
+
+
+def test_similar_exam_questions_reuse_diagram_crop(client,ollama):
+    calls,_=ollama;paper_id=paper(client)
+    assert client.post(f'/api/papers/{paper_id}/vision',json={'pages':[1],'mode':'similar'}).status_code==400
+    source_question='Identify the chamber indicated in this diagram.'
+    response=client.post(f'/api/papers/{paper_id}/vision',json={'pages':[1],'mode':'similar','original_question':source_question,'region':[.2,.2,.5,.5]})
+    assert response.status_code==200,response.text
+    assert finish(client,response.json())['state']=='completed'
+    prompt=next(body for path,body in calls if path=='/api/chat')['messages'][1]['content']
+    assert 'NEW mock-exam MCQs' in prompt and 'Reuse this exact PDF diagram' in prompt
+    assert source_question in prompt and 'do not copy the original stem' in prompt
+    detail=client.get(f'/api/papers/{paper_id}/visuals').json()['results'][0]
+    assert detail['mode']=='similar' and detail['original_question']==source_question
+    client.patch(f'/api/papers/{paper_id}/visuals/1',json={'reviewed':True})
+    exam=client.post('/api/exams',json={'include_visual':True,'count':1}).json()
+    assert '?region=' in exam['questions'][0]['image']
+    assert client.get(exam['questions'][0]['image']).content==client.get(f'/api/papers/{paper_id}/pages/1/image',params={'region':json.dumps([.2,.2,.5,.5])}).content

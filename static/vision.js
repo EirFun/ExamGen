@@ -22,8 +22,11 @@ async function checkVision(){
 }
 function updateVisionButtons(){
   const paper=state.papers.find(p=>p.id===visionPaper);
-  $('#vision-analyze').disabled=visionBusy||!visionReady||!paper?.has_images;
-  $('#vision-batch').disabled=visionBusy||!visionReady||!paper?.has_images;
+  const similar=$('#vision-mode').value==='similar';
+  $('#vision-analyze').disabled=visionBusy||!visionReady||!paper?.has_images||(similar&&!visionRegion);
+  $('#vision-analyze').textContent=similar?'Create similar questions':'Analyze this page';
+  $('#vision-similar-fields').hidden=!similar;
+  $('#vision-batch').disabled=visionBusy||!visionReady||!paper?.has_images||similar;
 }
 async function loadVisionPaper(){
   if(!visionPaper){$('#vision-image').hidden=true;$('#vision-image-empty').hidden=false;updateVisionButtons();return;}
@@ -34,7 +37,7 @@ async function loadVisionPaper(){
     loadVisionPage();
   }catch(e){notify(e.message);}
 }
-function resetCrop(){visionRegion=null;$('#vision-crop').hidden=true;$('#crop-hint').textContent='Whole page selected. Drag over a diagram to focus on it.';}
+function resetCrop(){visionRegion=null;$('#vision-crop').hidden=true;$('#crop-hint').textContent='Whole page selected. Drag around the diagram to create similar questions.';updateVisionButtons();}
 function loadVisionPage(){
   resetCrop();const page=Number($('#vision-page').value);
   $('#vision-image').hidden=!visionData?.has_images;
@@ -45,14 +48,14 @@ function loadVisionPage(){
 function renderVisionResult(){
   const detail=visionData?.results.find(r=>r.page===Number($('#vision-page').value));
   if(!detail){$('#vision-result').innerHTML='<div class="empty">Analyze this page to see its interpretation and practice questions.</div>';return;}
-  $('#vision-result').innerHTML=`<span class="badge">${detail.reviewed?'Reviewed for practice':'Local AI draft'} · ${esc(detail.model)}</span><div class="vision-draft">Check the identification, labels and answers against your course materials. A small vision model can misread medical diagrams.</div><h4>What the model sees</h4><div class="vision-answer">${esc(detail.description)}</div>${detail.identified_items.length?`<ul>${detail.identified_items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}<h4>Reasoning</h4><div class="vision-answer">${esc(detail.reasoning)}</div>${detail.uncertainties.length?`<h4>Uncertainties</h4><ul>${detail.uncertainties.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}<p class="muted">Topics: ${esc(detail.topics.join(', ')||'No topic inferred')}</p>${detail.region?'<p class="muted">This result used a diagram crop.</p>':''}${detail.questions.map(q=>`<div class="vision-question-card"><strong>${esc(q.stem)}</strong><ol type="A">${q.options.map(o=>`<li>${esc(o)}</li>`).join('')}</ol><details><summary>Answer & explanation</summary><p>${String.fromCharCode(65+q.answer)}. ${esc(q.explanation)}</p></details></div>`).join('')}<button class="secondary" id="vision-review">${detail.reviewed?'Remove from reviewed practice':'Mark reviewed & use for practice'}</button>`;
+  $('#vision-result').innerHTML=`<span class="badge">${detail.reviewed?'Reviewed for practice':'Local AI draft'} · ${esc(detail.model)}</span><div class="vision-draft">Check the identification, labels and answers against your course materials. A small vision model can misread medical diagrams.</div><h4>What the model sees</h4><div class="vision-answer">${esc(detail.description)}</div>${detail.identified_items.length?`<ul>${detail.identified_items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}<h4>Reasoning</h4><div class="vision-answer">${esc(detail.reasoning)}</div>${detail.uncertainties.length?`<h4>Uncertainties</h4><ul>${detail.uncertainties.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}<p class="muted">Topics: ${esc(detail.topics.join(', ')||'No topic inferred')}</p>${detail.region?'<p class="muted">This result used a diagram crop.</p>':''}${detail.mode==='similar'?'<h4>Similar mock-exam questions</h4><p class="muted">These new questions reuse your cropped PDF diagram.</p>':''}${detail.questions.map(q=>`<div class="vision-question-card"><strong>${esc(q.stem)}</strong><ol type="A">${q.options.map(o=>`<li>${esc(o)}</li>`).join('')}</ol><details><summary>Answer & explanation</summary><p>${String.fromCharCode(65+q.answer)}. ${esc(q.explanation)}</p></details></div>`).join('')}<button class="secondary" id="vision-review">${detail.reviewed?'Remove from reviewed practice':'Mark reviewed & use for practice'}</button>`;
   $('#vision-review').onclick=async()=>{
     try{await api(`/papers/${visionPaper}/visuals/${detail.page}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({reviewed:!detail.reviewed})});detail.reviewed=!detail.reviewed;renderVisionResult();await refresh();notify(detail.reviewed?'Reviewed topics and questions are available in exam practice.':'Interpretation returned to draft.',true);}catch(e){notify(e.message);}
   };
 }
 async function startVision(pages){
   try{
-    const job=await api(`/papers/${visionPaper}/vision`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pages,question:$('#vision-question').value,region:pages.length===1?visionRegion:null})});
+    const job=await api(`/papers/${visionPaper}/vision`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pages,mode:$('#vision-mode').value,original_question:$('#vision-original-question').value,question:$('#vision-question').value,region:pages.length===1?visionRegion:null})});
     sessionStorage.setItem('examgen-vision-paper',visionPaper);beginVisionJob(job);
   }catch(e){notify(e.message);}
 }
@@ -76,6 +79,7 @@ async function pollVision(id){
     visionBusy=true;$('#vision-cancel').hidden=false;updateVisionButtons();visionPoll=setTimeout(()=>pollVision(id),1500);
   }catch(e){visionBusy=false;visionActive=null;sessionStorage.removeItem('examgen-vision-job');updateVisionButtons();notify(e.message);}
 }
+$('#vision-mode').onchange=updateVisionButtons;
 $('#vision-refresh').onclick=refreshVision;
 $('#vision-paper').onchange=()=>{visionPaper=$('#vision-paper').value;loadVisionPaper();};
 $('#vision-page').onchange=loadVisionPage;
@@ -102,7 +106,7 @@ wrap.onpointermove=e=>{
   if(!cropStart)return;const point=relativePoint(e);const x=Math.min(cropStart[0],point[0]),y=Math.min(cropStart[1],point[1]),w=Math.abs(point[0]-cropStart[0]),h=Math.abs(point[1]-cropStart[1]);
   visionRegion=[x,y,w,h];const box=$('#vision-crop');box.hidden=false;Object.assign(box.style,{left:`${x*100}%`,top:`${y*100}%`,width:`${w*100}%`,height:`${h*100}%`});
 };
-wrap.onpointerup=()=>{cropStart=null;if(!visionRegion||visionRegion[2]<.02||visionRegion[3]<.02)resetCrop();else $('#crop-hint').textContent='Diagram crop selected. The model will see this region and the page’s question text.';};
+wrap.onpointerup=()=>{cropStart=null;if(!visionRegion||visionRegion[2]<.02||visionRegion[3]<.02)resetCrop();else $('#crop-hint').textContent='Diagram crop selected. New questions will reuse this image. Keep original answers outside the crop.';updateVisionButtons();};
 wrap.onpointercancel=()=>{cropStart=null;resetCrop();};
 $('#vision-image').onerror=()=>{notify('Could not show this source page. Try restoring the PDF by uploading it again.');};
 if(visionActive){visionPaper=sessionStorage.getItem('examgen-vision-paper');visionBusy=true;}

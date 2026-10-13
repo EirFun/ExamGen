@@ -15,7 +15,10 @@ take a few minutes; split long papers if recognition times out.
 Diagram and photo understanding (fully local, optional):
 1. Install Ollama from https://ollama.com/download/windows and open it.
 2. In ExamGen, open Diagram lab and click Download vision model (about 3 GB).
-3. Choose your paper/page, drag around one diagram, and click Analyze page.
+3. Choose your paper/page and crop the diagram alone, leaving original answers
+   outside the crop. Select Create similar mock-exam questions, optionally
+   paste the original question, and click Create similar questions. The new
+   questions reuse that diagram. Explain the image is also available.
 4. Check the result against the source, then mark it reviewed. Enable reviewed
    diagram questions when generating a mock exam to include its draft MCQs.
 

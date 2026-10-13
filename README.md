@@ -12,7 +12,7 @@ A local medical-school past-paper analyzer and mock exam studio. No API key or e
 
 1. Install [Ollama for Windows](https://ollama.com/download/windows), then open Ollama from the Start menu.
 2. Open ExamGen → **Diagram lab** → **Download vision model**. The default `qwen2.5vl:3b` download is about 3 GB; Internet is needed once for installation and model download.
-3. Select a paper/page. Drag around one diagram for better detail, add an optional question, and click **Analyze page**. You can also analyze up to 20 pages in a batch.
+3. Select a paper/page. Drag around one diagram for better detail, add an optional question, and choose **Create similar mock-exam questions**, optionally paste the original question, and click **Create similar questions**. Crop the diagram alone so the original answers are not included in the exam image. Variations reuse that exact cropped diagram and target the original concept with new stems, options, answers and explanations. **Explain the image** remains available, including analysis of up to 20 pages in a batch.
 4. Compare the interpretation with the source. Mark it reviewed to include its topics in recurrence analysis and its draft questions in mock exams (enable **Include reviewed diagram questions**).
 
 The 3B model is the default for a laptop RTX 4050, usually with 6 GB VRAM. Ollama selects the GPU automatically; the lab displays reported GPU memory after analysis. Close GPU-heavy applications and crop one diagram if memory is tight. CPU fallback is supported but slower. No GPU speed claim is made by the CPU CI check.

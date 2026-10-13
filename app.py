@@ -314,7 +314,11 @@ def download_model():
         return vision_jobs.start('download',worker)
     except (RuntimeError,vision.VisionError) as error:raise HTTPException(409,str(error)) from None
 
+from typing import Literal
+
 class VisionRequest(BaseModel):
+    mode:Literal["interpret","similar"]="interpret"
+    original_question:str=Field(default="",max_length=1200)
     pages:list[int]=Field(min_length=1,max_length=20)
     question:str=Field(default='',max_length=500)
     region:list[float]|None=None
@@ -328,6 +332,8 @@ def analyze_visuals(paper_id:str,request:VisionRequest):
         if len(pages)!=1 or len(request.region)!=4:raise HTTPException(400,'A diagram crop can only be used with one page.')
         x,y,w,h=request.region
         if not all(0<=v<=1 for v in request.region) or w<.02 or h<.02 or x+w>1.00001 or y+h>1.00001:raise HTTPException(400,'Select a valid image crop.')
+    if request.mode=='similar' and (len(pages)!=1 or request.region is None):
+        raise HTTPException(400,'Crop the diagram alone on one page before generating similar questions, so the original question and answer key are not shown in the mock exam.')
     ready=vision.status()
     if not ready['ready']:raise HTTPException(409,ready['message'])
     texts=json.loads(paper['extracted'])
@@ -339,7 +345,11 @@ def analyze_visuals(paper_id:str,request:VisionRequest):
             vision_jobs.update(job_id,message=f'Interpreting page {page} locally…')
             try:
                 image=vision.render_page(paper['pdf_bytes'],page,request.region,max_side=1120)
-                detail=vision.interpret(image,texts[page-1],request.question)
+                detail=vision.interpret(image,texts[page-1],request.question,mode='similar',original_question=request.original_question) if request.mode=='similar' else vision.interpret(image,texts[page-1],request.question)
+                if request.mode=='similar' and not detail['questions']:
+                    raise vision.VisionError('The model could not create reliable variations. Paste the original question and choose a clearer diagram crop. '+ '; '.join(detail['uncertainties'])[:200])
+                detail['mode']=request.mode
+                detail['original_question']=request.original_question
                 detail['region']=request.region
                 detail['student_question']=request.question
                 with connect() as db:
