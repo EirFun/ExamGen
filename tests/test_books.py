@@ -171,6 +171,53 @@ def test_missing_correct_answer_is_rejected(client,ollama):
     job=finish(client,client.post(f'/api/papers/{source}/vision',json={'pages':[1]}).json())
     assert job['state']=='failed' and 'omitted the correct option' in job['message']
 
+def test_source_dependent_exam_rewritten_and_citations_hidden(client,ollama):
+    calls,settings=ollama
+    add(client,'exam','Explain how the left ventricle supplies systemic circulation.')
+    add(client,'book',BOOK)
+    good=grounded_reply(client,settings)
+    bad=copy.deepcopy(good)
+    bad['questions'][0]['stem']='In CVS Practical Exam 2020.pdf, page 1, text 44 H, the excerpt discusses circulation. Which chamber supplies it?'
+    attempts=[]
+    def reply(body):
+        attempts.append(body)
+        return bad if len(attempts)==1 else good
+    settings['reply']=reply
+    job=finish(client,client.post('/api/exams/grounded',json={'count':1}).json())
+    assert job['state']=='completed',job
+    assert len(attempts)==2 and 'closed-book' in attempts[1]['messages'][1]['content']
+    draft=job['draft']['questions'][0]
+    assert draft['stem']==good['questions'][0]['stem'] and draft['book_sources'][0]['quote']
+    ready=client.post('/api/exams/grounded/'+job['id']+'/accept').json()
+    q=ready['questions'][0]
+    assert 'book_sources' not in q and '.pdf' not in q['stem']
+    graded=client.post('/api/exams/'+ready['id']+'/submit',json={'answers':{q['id']:q['options'].index('Left ventricle')}}).json()
+    assert graded['results'][0]['book_sources'][0]['quote']
+
+def test_persistent_source_dependency_is_rejected(client,ollama):
+    calls,settings=ollama
+    add(client,'exam','Explain left ventricle ejection into the aorta.')
+    add(client,'book',BOOK)
+    result=grounded_reply(client,settings)
+    result['questions'][0]['options'][0]='According to the supplied excerpt, left ventricle'
+    job=finish(client,client.post('/api/exams/grounded',json={'count':1}).json())
+    assert job['state']=='failed' and 'external source material' in job['message']
+    assert len([body for path,body in calls if path=='/api/chat'])==2
+
+@pytest.mark.parametrize('stem',[
+    'According to the textbook, which chamber ejects blood?',
+    'Refer to the provided passage to identify the structure.',
+    'What does source ID 44 describe?',
+    'In the figure shown below, identify the indicated chamber.',
+])
+def test_explicit_source_and_missing_figure_dependencies(stem):
+    assert vision.exam_dependency({'stem':stem},False)
+
+def test_self_contained_theory_and_supplied_diagram_allowed():
+    assert not vision.exam_dependency({'stem':'Which chamber supplies systemic circulation?'},False)
+    assert not vision.exam_dependency({'stem':'Which graph type is best for continuous measurements?'},False)
+    assert not vision.exam_dependency({'stem':'Identify the arrow target in the supplied diagram.'},True)
+
 def test_copied_original_question_is_rewritten_once_then_rejected(client,ollama):
     calls,settings=ollama;source=paper(client);result=copy.deepcopy(RESULT)
     original='Identify the chamber in the diagram.';result['questions'][0]['stem']=original;settings['reply']=result
