@@ -4,7 +4,7 @@ A local medical-school past-paper analyzer and mock exam studio. No API key or e
 
 ## Windows download
 
-[Download ExamGen for Windows (64-bit Windows 10/11)](https://github.com/EirFun/ExamGen/raw/refs/heads/main/downloads/ExamGen-Windows-x64.zip). Extract the ZIP and double-click **ExamGen.exe**. No Python installation is required. Keep the ExamGen console window open while using the app. This build is unsigned and may trigger a Windows publisher warning. Build provenance and validation details are included in BUILD-INFO.json inside the download. Native Windows CI tests the OCR pipeline and packaged executable before publishing a build.
+[Download ExamGen for Windows (64-bit Windows 10/11)](https://github.com/EirFun/ExamGen/raw/refs/heads/main/downloads/ExamGen-Windows-x64.zip). Extract the ZIP and double-click **ExamGen.exe**. No Python installation is required. Keep the ExamGen console window open while using the app. This build is unsigned and may trigger a Windows publisher warning. Build provenance and validation details are included in BUILD-INFO.json inside the download. Native Windows CI tests the OCR and local vision integration pipelines and packaged executable before publishing a build. [Validation run](https://github.com/EirFun/ExamGen/actions/runs/38350474923) includes 19 application tests, packaged OCR/vision checks, and a separate real-model CPU smoke test on a synthetic diagram.
 
 ## Fully local diagrams and photographs
 
