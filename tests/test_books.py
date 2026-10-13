@@ -178,3 +178,12 @@ def test_copied_original_question_is_rewritten_once_then_rejected(client,ollama)
     job=finish(client,response.json());assert job['state']=='failed'
     assert len([body for path,body in calls if path=='/api/chat'])==2
     assert not client.get(f'/api/papers/{source}/visuals').json()['results']
+
+def test_grounded_theory_uses_reviewed_visual_topics_for_focus(client,ollama):
+    _,settings=ollama;source=paper(client);add(client,'book',BOOK);grounded_reply(client,settings)
+    job=finish(client,client.post(f'/api/papers/{source}/vision',json={'pages':[1],'verified_label':'Left ventricle'}).json())
+    assert job['state']=='completed'
+    client.patch(f'/api/papers/{source}/visuals/1',json={'reviewed':True})
+    response=client.post('/api/exams/grounded',json={'count':1,'topics':['Cardiovascular physiology']})
+    assert response.status_code==200,response.text
+    assert finish(client,response.json())['state']=='completed'

@@ -307,13 +307,19 @@ def generate_grounded(request:GroundedRequest):
     with connect() as db:
         if request.syllabus_id and not db.execute("SELECT 1 FROM papers WHERE id=? AND kind='syllabus'",(request.syllabus_id,)).fetchone():raise HTTPException(400,"Choose a valid syllabus.")
         if not db.execute("SELECT 1 FROM papers WHERE kind='book'").fetchone():raise HTTPException(409,'Add a PDF book for answer references.')
-        rows=db.execute("SELECT name,extracted FROM papers WHERE kind='exam' ORDER BY created DESC").fetchall()
+        rows=db.execute("SELECT id,name,extracted FROM papers WHERE kind='exam' ORDER BY created DESC").fetchall()
+        reviewed_pages=db.execute("SELECT v.paper_id,v.page,v.result FROM visual_pages v JOIN papers p ON p.id=v.paper_id WHERE v.reviewed=1 AND p.kind='exam'").fetchall()
+    page_context={}
+    for row in reviewed_pages:
+        detail=json.loads(row['result'])
+        if set(request.topics).intersection(t.strip() for t in detail.get('topics',[])):
+            page_context[(row['paper_id'],row['page'])]=detail.get('verified_label','')+' '+detail['description']
     examples=[]
     for paper in rows:
         for page,text in enumerate(json.loads(paper['extracted']),1):
             for block in passages(text):
-                if request.topics and not set(topics_for(block)).intersection(request.topics):continue
-                examples.append({'exam':paper['name'],'page':page,'text':block[:900]})
+                if request.topics and not set(topics_for(block)).intersection(request.topics) and (paper['id'],page) not in page_context:continue
+                examples.append({'exam':paper['name'],'page':page,'text':block[:900],'diagram_focus':page_context.get((paper['id'],page),'')})
                 if len(examples)>=60:break
             if len(examples)>=60:break
         if len(examples)>=60:break
@@ -328,7 +334,7 @@ def generate_grounded(request:GroundedRequest):
             if vision_jobs.get(job_id)['cancelled']:return
             example=examples[(offset//3)%len(examples)]
             vision_jobs.update(job_id,message='Finding book passages for exam examples…',response_chars=0)
-            query=example.get('verified_label','')+' '+example['text']+' '+' '.join(request.topics)
+            query=example.get('verified_label','')+' '+' '.join(request.topics)+' '+example.get('diagram_focus','')+' '+example['text']
             with connect() as db:references=books.retrieve(db,query,limit=2)
             try:
                 with connect() as db:scope=books.syllabus_sources(db,request.syllabus_id,query)
