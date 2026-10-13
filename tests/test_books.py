@@ -134,6 +134,7 @@ def test_streamed_progress_gpu_and_model_choice(client,ollama,monkeypatch):
 def test_model_option_prefixes_removed_before_shuffling(client,ollama):
     _,settings=ollama;source=paper(client);reply=copy.deepcopy(RESULT)
     reply['questions'][0]['options']=[f'{letter}. {option}' for letter,option in zip('ABCD',reply['questions'][0]['options'])]
+    reply['questions'][0]['correct_answer']='The left ventricle.'
     settings['reply']=reply
     assert finish(client,client.post(f'/api/papers/{source}/vision',json={'pages':[1]}).json())['state']=='completed'
     q=client.get(f'/api/papers/{source}/visuals').json()['results'][0]['questions'][0]
@@ -162,3 +163,10 @@ def test_source_ids_and_correct_option_replace_model_index(client,ollama):
     q['correct_answer']='A nonexistent answer'
     job=finish(client,client.post(f'/api/papers/{source}/vision',json={'pages':[1]}).json())
     assert job['state']=='failed' and 'does not match' in job['message']
+
+
+def test_missing_correct_answer_is_rejected(client,ollama):
+    _,settings=ollama;source=paper(client);result=copy.deepcopy(RESULT)
+    result['questions'][0].pop('correct_answer');settings['reply']=result
+    job=finish(client,client.post(f'/api/papers/{source}/vision',json={'pages':[1]}).json())
+    assert job['state']=='failed' and 'omitted the correct option' in job['message']

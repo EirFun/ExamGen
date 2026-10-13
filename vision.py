@@ -25,15 +25,15 @@ class Citation(BaseModel):
     quote:str=Field(default="",max_length=500)
 
 class VisualQuestion(BaseModel):
-    syllabus_quote:str=Field(default="",max_length=500)
-    syllabus_source_id:str=Field(default="",max_length=40)
     type:Literal["mcq"]="mcq"
-    correct_answer:str=Field(default="",max_length=500)
-    citations:list[Citation]=Field(default_factory=list,max_length=3)
     stem: str = Field(min_length=10,max_length=2000)
     options: list[Short] = Field(min_length=4,max_length=4)
-    answer: int = Field(default=0,ge=0,le=3)
+    correct_answer:str=Field(default="",max_length=500)
     explanation: str = Field(min_length=10,max_length=3000)
+    citations:list[Citation]=Field(default_factory=list,max_length=3)
+    syllabus_source_id:str=Field(default="",max_length=40)
+    syllabus_quote:str=Field(default="",max_length=500)
+    answer: int = Field(default=0,ge=0,le=3)
 
 class SubjectiveQuestion(BaseModel):
     syllabus_quote:str=Field(default="",max_length=500)
@@ -233,10 +233,12 @@ def interpret(image,text,question='',mode='interpret',original_question='',refer
         for q in detail['questions']:
             if q.get('type')=='mcq':
                 q['options']=[re.sub(r'^\s*(?:[A-Da-d][.)]|\([A-Da-d]\))\s+','',option).strip() for option in q['options']]
+                if not q.get('correct_answer'):raise VisionError('The model omitted the correct option text. Try generating one question.')
                 if q.get('correct_answer'):
                     correct=re.sub(r'^\s*(?:[A-Da-d][.)]|\([A-Da-d]\))\s+','',q['correct_answer']).strip()
-                    matches=[i for i,option in enumerate(q['options']) if option.casefold()==correct.casefold()]
-                    if len(matches)!=1:raise VisionError('The model answer does not match one of its options. Try generating one question.')
+                    def choice_key(value):return re.sub(r'^(?:the|a|an)\s+','',value.casefold().strip().rstrip('.')).strip()
+                    matches=[i for i,option in enumerate(q['options']) if choice_key(option)==choice_key(correct)]
+                    if len(matches)!=1:raise VisionError('The model answer does not match one of its options. Try generating one question. '+str({'chosen':q['correct_answer'],'options':q['options']}))
                     q['answer']=matches[0];q['correct_answer']=q['options'][q['answer']]
                 if any(not o for o in q['options']) or len({o.casefold() for o in q['options']})!=4:raise VisionError('The model returned invalid or duplicate choices. Try generating one question.')
         count=response.get('eval_count',0);duration=response.get('eval_duration',0)/1e9

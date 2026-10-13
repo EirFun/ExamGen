@@ -11,7 +11,7 @@ from PIL import Image
 import vision
 from tests.test_app import client, pdf, upload
 
-RESULT={'description':'A labelled cardiovascular diagram.','identified_items':['Left ventricle'],'topics':['Cardiovascular physiology'],'reasoning':'The indicated chamber ejects blood to the systemic circulation.','uncertainties':['Verify the labels against the source diagram.'],'questions':[{'stem':'Which chamber supplies the systemic circulation?','options':['Left ventricle','Right ventricle','Right atrium','Left atrium'],'answer':0,'explanation':'The left ventricle ejects blood through the aorta into the systemic circulation.'}]}
+RESULT={'description':'A labelled cardiovascular diagram.','identified_items':['Left ventricle'],'topics':['Cardiovascular physiology'],'reasoning':'The indicated chamber ejects blood to the systemic circulation.','uncertainties':['Verify the labels against the source diagram.'],'questions':[{'stem':'Which chamber supplies the systemic circulation?','options':['Left ventricle','Right ventricle','Right atrium','Left atrium'],'answer':0,'correct_answer':'Left ventricle','explanation':'The left ventricle ejects blood through the aorta into the systemic circulation.'}]}
 
 @pytest.fixture
 def ollama(monkeypatch):
