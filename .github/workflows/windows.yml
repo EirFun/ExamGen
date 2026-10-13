@@ -71,3 +71,8 @@ jobs:
         with:
           name: Local-vision-smoke-report
           path: build/local-vision-smoke.json
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: Local-vision-smoke-diagnostics
+          path: build/ollama-smoke/server.log

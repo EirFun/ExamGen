@@ -126,7 +126,7 @@ async def upload(file: UploadFile = File(...)):
 @app.get('/api/analysis')
 def analysis():
     with connect() as db:
-        papers = db.execute('SELECT * FROM papers ORDER BY created DESC').fetchall()
+        papers = db.execute('SELECT id,name,pages,extracted,created,ocr_pages,pdf_bytes IS NOT NULL AS has_images FROM papers ORDER BY created DESC').fetchall()
     stats = {}
     question_total = 0
     question_groups = []
@@ -157,7 +157,7 @@ def analysis():
                     row['paper_ids'].add(paper['id'])
                     if len(row['sources']) < 8:
                         row['sources'].append({'paper': paper['name'], 'page': page_number, 'excerpt': block[:650]})
-        library.append({'id': paper['id'], 'name': paper['name'], 'pages': paper['pages'], 'created': paper['created'], 'topics': len(paper_topics), 'matched_passages': matches, 'ocr_pages': paper['ocr_pages'], 'has_images':paper['pdf_bytes'] is not None})
+        library.append({'id': paper['id'], 'name': paper['name'], 'pages': paper['pages'], 'created': paper['created'], 'topics': len(paper_topics), 'matched_passages': matches, 'ocr_pages': paper['ocr_pages'], 'has_images':bool(paper['has_images'])})
     with connect() as db:
         visuals=db.execute('SELECT v.*,p.name FROM visual_pages v JOIN papers p ON p.id=v.paper_id WHERE v.reviewed=1').fetchall()
     visual_counts={}
