@@ -64,12 +64,13 @@ def main():
         result=vision.interpret(encoded.getvalue(),'','Read both printed labels and state the arrow direction. Do not generate practice questions for this smoke test.')
         text=json.dumps(result,ensure_ascii=False).lower()
         assert 'ventricle' in text and 'aorta' in text,result
-        STAGE='generate a new diagram question'
-        variations=vision.interpret(encoded.getvalue(),'Identify the chamber in the diagram.',mode='similar',original_question='Identify the chamber in the diagram.',question_count=1)
+        references=[{'id':'1','book_id':'synthetic-book','book':'Synthetic physiology source','page':1,'excerpt':'The left ventricle ejects blood into the aorta, which supplies the systemic circulation. The aorta carries oxygenated blood to the body.'}]
+        STAGE='generate a book-grounded diagram variation'
+        variations=vision.interpret(encoded.getvalue(),'Identify the chamber in the diagram.',mode='similar',original_question='Identify the chamber in the diagram.',question_count=1,references=references,verified_label='Left ventricle')
         assert variations['questions'],variations
         for item in variations['questions']:
+            item['book_sources']=books.validate_citations(item['citations'],references)
             assert item['stem'].strip().lower()!='identify the chamber in the diagram.',{'copied_original_question':item}
-        references=[{'id':'1','book_id':'synthetic-book','book':'Synthetic physiology source','page':1,'excerpt':'The left ventricle ejects blood into the aorta, which supplies the systemic circulation. The aorta carries oxygenated blood to the body.'}]
         scope=[{'id':'2','book_id':'synthetic-syllabus','book':'Synthetic syllabus','page':1,'excerpt':'Cardiovascular physiology: describe left ventricular ejection into the aorta and systemic circulation.'}]
         fragments=[]
         STAGE='grounded MCQ and syllabus'
