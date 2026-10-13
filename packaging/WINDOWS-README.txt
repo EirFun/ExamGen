@@ -47,3 +47,29 @@ checked against your medical curriculum and current guidance.
 
 Diagnostics: if startup fails, see %LOCALAPPDATA%\ExamGen\startup-error.log.
 Advanced: ExamGen.exe --no-browser --port 8000
+
+Books, exams and syllabus:
+Use the PDF library category tabs. Existing PDFs stay in Exam PDFs; change their
+category with the selector. Books support 60 MB / 1200 pages; split large scans
+into chapters. Exam PDFs support 20 MB / 300 pages.
+
+Choose MCQ (theory) or Subjective (practical with diagrams) in the exam studio.
+Generate from books & exam style uses local book passages for answer evidence,
+with verified quotations and PDF page links. For practical generation, first
+save an exam diagram crop in Diagram lab. Review source-grounded drafts before
+starting. Subjective questions show model answers and marking points for
+self-assessment; free-text clinical correctness is not automatically graded.
+
+Syllabus is optional: upload a PDF or PNG/JPEG/WebP photo, then select it as a
+scope guide or leave No syllabus restriction. OCR and retrieval stay local.
+Quoted objectives and book excerpts still need your review for relevance.
+
+GPU/progress:
+Run ollama ps in PowerShell. 100% GPU means your NVIDIA GPU is being used fully.
+The app streams elapsed time, generation stages and response activity. Fast
+mode uses one question and a smaller image; detailed mode helps with tiny labels.
+The model stays warm for ten minutes. First-request loading is slower.
+An optional 7B model may spill to CPU on an RTX 4050 (6 GB) and be much slower.
+A larger model still cannot guarantee correct medical image identification.
+Use Confirmed structure/topic to supply a course-verified correction before
+creating questions. Book facts do not independently verify an arrow target.

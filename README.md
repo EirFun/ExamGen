@@ -1,10 +1,31 @@
 # ExamGen
 
-A local medical-school past-paper analyzer and mock exam studio. No API key or external AI service required.
+A local medical-school PDF library, source-grounded exam generator and mock exam studio. No API key or external AI service required.
 
 ## Windows download
 
 [Download ExamGen for Windows (64-bit Windows 10/11)](https://github.com/EirFun/ExamGen/raw/refs/heads/main/downloads/ExamGen-Windows-x64.zip). Extract the ZIP and double-click **ExamGen.exe**. No Python installation is required. Keep the ExamGen console window open while using the app. This build is unsigned and may trigger a Windows publisher warning. Build provenance and validation details are included in BUILD-INFO.json inside the download. Native Windows CI tests the OCR and local vision integration pipelines and packaged executable before publishing a build. [Validation run](https://github.com/EirFun/ExamGen/actions/runs/38416532130) includes 20 application tests, packaged OCR/vision checks, and a separate real-model CPU smoke test of diagram reading and similar-question generation on a synthetic diagram.
+
+## Books, exams, optional syllabus, and question format
+
+The PDF library has three categories: **Exam PDFs**, **PDF books**, and optional **Syllabus**. Existing library entries remain exams; use the category selector to move an entry without reuploading. Books and syllabi do not inflate past-exam recurrence counts.
+
+- Upload exams for question style and topic recurrence; upload books for answer evidence. Exams support 20 MB / 300 pages; books support 60 MB / 1200 pages. Large scanned books should be split into chapters because OCR has a four-minute document limit.
+- In Mock exam studio, choose **MCQ · theory** or **Subjective · practical with diagrams**, then **Generate from books & exam style**. MCQ drafts use example stems from exams and relevant book excerpts. For practical drafts, first crop and analyze an exam diagram in Diagram lab; the saved crop supplies the image. Review the draft and its book quotations before starting the exam.
+- Local SQLite FTS5 retrieval finds relevant overlapping book passages with lexical/BM25 matching. Generated answer references include the book name, physical PDF page, and an exact quote checked against the provided excerpt. This verifies quotation provenance, not whether the model's reasoning is correct. It can miss paraphrases or sources in a different language. The app omits unsupported or invalidly cited questions rather than adding guessed references; the resulting exam may have fewer items than requested.
+- Subjective questions include a model answer, explanation and marking points. Written answers are **self-assessed**, with a score shown after you mark them; the app does not automatically grade free text as clinically correct.
+- Upload a syllabus PDF or PNG/JPEG/WebP photo to **Syllabus**. Photos are converted locally to PDF and OCR text. Select the syllabus in the lab or exam studio, or leave **No syllabus restriction**. AI drafts use matching syllabus objective passages and must quote an objective from them; unrelated/uncited items are omitted. A valid quote is not proof of semantic alignment, so review the objective shown beside each draft. Included-bank exams use lexical syllabus filtering.
+- The included bank / reviewed diagrams option remains available for quick practice. Diagram lab can optionally ground answers in books (enabled when books are available), choose either question format, and use an optional syllabus.
+
+## GPU, speed, progress, and anatomical identification
+
+Ollama selects supported GPUs automatically. Run `ollama ps` in PowerShell: **100% GPU** confirms full GPU offload. A first request loads the model and processes the image; later requests within ten minutes reuse it. Generation now streams progress: the current stage, elapsed time and response characters are shown; finished interpretations report model load/prompt time and output tokens per second. Model-memory residency shown in the app is approximate; `ollama ps` is the direct check.
+
+The default fast setting uses a 768-pixel image and one question. Detailed mode preserves up to 1120 pixels for small labels; three questions take longer. Cropping a single diagram usually improves detail per pixel. Both OCR/PDF rendering and local book retrieval still use CPU.
+
+The **3B** model suits limited VRAM but can confidently misidentify anatomical photos, arrow targets, and graphs. In **Confirmed structure/topic**, enter an identification checked against your course materials before generating variations. The model treats it as a student annotation, not independent visual confirmation. Books support factual answers but do not prove which structure an arrow indicates.
+
+An optional **7B** model is selectable in Diagram lab and needs its own download (about 6 GB). It can spill into CPU memory on a 6 GB RTX 4050 and be substantially slower. Larger general models still make medical image errors; neither model is validated for anatomical identification or diagnosis.
 
 ## Fully local diagrams and photographs
 
@@ -21,7 +42,7 @@ Interpretations can misidentify medical images or invent answers: this is a gene
 
 Existing library entries from older releases need the identical PDF uploaded again to restore their images, preserving the same entry. Back up the SQLite file with the app closed; it now contains original PDFs too. All page images, OCR text and inference requests stay on loopback. The transport rejects external servers, cloud model aliases and redirects. Model downloads fetch model files, not papers.
 
-Advanced source configuration: `EXAMGEN_OLLAMA_URL` accepts only an HTTP loopback Ollama URL; `EXAMGEN_VISION_MODEL` can select another installed local vision model. The default uses a 4096-token context. Tests exercise the complete pipeline with a loopback stub; a separate Windows CI job runs the actual model on a synthetic labelled diagram using CPU, not a medical accuracy benchmark.
+Advanced source configuration: `EXAMGEN_OLLAMA_URL` accepts only an HTTP loopback Ollama URL; `EXAMGEN_VISION_MODEL` can select another installed local vision model. The default uses a 4096-token context. Tests exercise the complete pipeline with a loopback stub; a separate Windows CI job runs the actual model on a synthetic labelled diagram using CPU, including book quotes, optional syllabus constraints, practical questions and streaming; this is not a medical accuracy benchmark.
 
 ## Run from source
 

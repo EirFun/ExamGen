@@ -22,12 +22,20 @@ def ollama(monkeypatch):
             payload=json.dumps(value).encode();self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload)
         def do_GET(self):
             calls.append((self.path,None))
-            self.answer({'models':[{'name':vision.DEFAULT_MODEL}]} if self.path=='/api/tags' and settings['installed'] else {'models':[]})
+            self.answer({'models':[{'name':vision.DEFAULT_MODEL}]} if self.path=='/api/tags' and settings['installed'] else {'models':settings.get('running',[])})
         def do_POST(self):
             body=json.loads(self.rfile.read(int(self.headers['Content-Length'])));calls.append((self.path,body))
             if self.path=='/api/show':self.answer({'capabilities':['vision','completion'],'remote_host':'https://ollama.com' if settings['remote'] else None})
             elif self.path=='/api/pull':settings['installed']=True;self.answer({'status':'success'})
-            elif self.path=='/api/chat':self.answer({'message':{'content':'broken' if settings['bad_json'] else json.dumps(RESULT)}})
+            elif self.path=='/api/chat':
+                result=settings.get('reply',RESULT)
+                if callable(result):result=result(body)
+                content='broken' if settings['bad_json'] else json.dumps(result)
+                if settings.get('streaming'):
+                    self.send_response(200);self.send_header('Content-Type','application/x-ndjson');self.end_headers()
+                    self.wfile.write((json.dumps({'message':{'content':content[:40]},'done':False})+'\n').encode());self.wfile.flush();settings['entered'].set();settings['proceed'].wait(3)
+                    self.wfile.write((json.dumps({'message':{'content':content[40:]},'done':True,'eval_count':10,'eval_duration':1000000000})+'\n').encode());self.wfile.flush()
+                else:self.answer({'message':{'content':content},'done':True})
             else:self.answer({})
     server=ThreadingHTTPServer(('127.0.0.1',0),Handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
     monkeypatch.setenv('EXAMGEN_OLLAMA_URL',f'http://127.0.0.1:{server.server_port}')
@@ -60,7 +68,7 @@ def test_local_image_analysis_review_and_visual_exam(client,ollama):
     assert response.status_code==200,response.text
     assert finish(client,response.json())['state']=='completed'
     chat=next(body for path,body in calls if path=='/api/chat')
-    assert chat['model']==vision.DEFAULT_MODEL and chat['stream'] is False
+    assert chat['model']==vision.DEFAULT_MODEL and chat['stream'] is True
     assert 'untrusted' in chat['messages'][0]['content']
     image=base64.b64decode(chat['messages'][1]['images'][0]);assert image.startswith(b'\xff\xd8')
     with Image.open(io.BytesIO(image)) as crop,Image.open(io.BytesIO(source.content)) as full:assert crop.width<full.width

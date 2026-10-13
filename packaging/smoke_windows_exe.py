@@ -71,6 +71,18 @@ def main():
                 time.sleep(.1)
             assert status['state']=='completed',status
             saved=json.loads(request(f'/api/papers/{paper}/visuals'))['results'];assert saved[0]['description']==result['description']
+            book_pdf=io.BytesIO();book_doc=canvas.Canvas(book_pdf);book_doc.drawString(30,750,'The left ventricle ejects blood into the aorta and supplies systemic circulation.');book_doc.save()
+            book_body=f'--{boundary}\r\nContent-Disposition: form-data; name="kind"\r\n\r\nbook\r\n--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="book.pdf"\r\nContent-Type: application/pdf\r\n\r\n'.encode()+book_pdf.getvalue()+f'\r\n--{boundary}--\r\n'.encode()
+            book_added=json.loads(request('/api/papers',book_body,{'Content-Type':f'multipart/form-data; boundary={boundary}'},'POST'))
+            assert book_added['kind']=='book'
+            assert json.loads(request('/api/books/search?query=ventricle'))['sources'][0]['book_id']==book_added['id']
+            assert len(json.loads(request('/api/analysis'))['books'])==1
+            syllabus_image=Image.new('RGB',(1200,350),'white');syllabus_draw=ImageDraw.Draw(syllabus_image);syllabus_font=ImageFont.truetype(str(font),32)
+            syllabus_draw.text((35,40),'Syllabus: cardiovascular physiology.',font=syllabus_font,fill='black');syllabus_draw.text((35,110),'Explain left ventricle ejection into the aorta.',font=syllabus_font,fill='black')
+            syllabus_png=io.BytesIO();syllabus_image.save(syllabus_png,format='PNG');syllabus_image.close()
+            syllabus_body=f'--{boundary}\r\nContent-Disposition: form-data; name="kind"\r\n\r\nsyllabus\r\n--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="syllabus.png"\r\nContent-Type: image/png\r\n\r\n'.encode()+syllabus_png.getvalue()+f'\r\n--{boundary}--\r\n'.encode()
+            syllabus_added=json.loads(request('/api/papers',syllabus_body,{'Content-Type':f'multipart/form-data; boundary={boundary}'},'POST'))
+            assert syllabus_added['ocr_pages']==1 and len(json.loads(request('/api/analysis'))['syllabi'])==1
             print('Packaged Windows app passed native OCR and local vision integration under Arabic TEMP/data paths. Vision used a loopback stub.')
         except Exception:
             log.flush();print((directory/'console.log').read_text(errors='replace'),file=sys.stderr);raise

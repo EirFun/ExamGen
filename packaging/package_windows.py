@@ -19,7 +19,7 @@ with zipfile.ZipFile(archive) as old,zipfile.ZipFile(temporary,'w',zipfile.ZIP_D
             info['validation']='Built and tested on native Windows: OCR, local vision integration, privacy guards and packaged executable checks. See GitHub Actions for separate real-model CPU validation.'
             info['python_runtime']={'version':sys.version,'source':'GitHub Actions setup-python Windows x64 runtime'}
             info['ocr_assets']=json.loads(Path('ocr_assets/SOURCES.json').read_text())
-            info['source_hashes']={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [Path('app.py'),Path('bank.py'),Path('desktop.py'),Path('ocr.py'),Path('vision.py'),Path('vision_jobs.py'),*sorted(Path('static').iterdir())]}
+            info['source_hashes']={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [Path('app.py'),Path('bank.py'),Path('desktop.py'),Path('ocr.py'),Path('vision.py'),Path('vision_jobs.py'),Path('books.py'),*sorted(Path('static').iterdir())]}
             info.pop('dependencies',None)
             info['dependencies_lock']='requirements-windows-build.txt'
             data=json.dumps(info,indent=2).encode()
