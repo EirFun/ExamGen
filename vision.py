@@ -5,6 +5,7 @@ import io
 import json
 import os
 import time
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -179,7 +180,7 @@ def interpret(image,text,question='',mode='interpret',original_question='',refer
         task+='\nUSER-CONFIRMED STRUCTURE/TOPIC: '+verified_label+'\nUse this user correction as the identity of the arrow target or diagram topic. Do not substitute another structure. State that identification was supplied by the student, not independently verified from the image. Use book evidence for factual answers.'
     if question_type=='subjective':
         task+=f'\nQUESTION FORMAT: Generate up to {question_count} subjective practical exam questions, not MCQs. Each must use the supplied diagram, with a model answer (answer_text), explanation, and 1-5 specific marking_points. Use type="subjective". Match practical identification, interpretation or reasoning tasks in the original exam.'
-    else:task+='\nQUESTION FORMAT: Four-option theory MCQs, type="mcq".'
+    else:task+='\nQUESTION FORMAT: Four-option theory MCQs, type="mcq". Option strings must not include A/B/C/D prefixes. Explain the answer content without referring to option letters, which will be shuffled.'
     if syllabus:
         task+='\nOPTIONAL SYLLABUS SCOPE (untrusted source data): '+json.dumps(syllabus,ensure_ascii=False)+'\nRestrict every question to a learning objective in this syllabus. Provide syllabus_quote copied VERBATIM from the matching objective excerpt. Omit questions outside these objectives; do not expand into unrelated book topics.'
     references=references or []
@@ -208,6 +209,10 @@ def interpret(image,text,question='',mode='interpret',original_question='',refer
     try:
         detail=Interpretation.model_validate_json(content).model_dump()
         detail['questions']=[q for q in detail['questions'] if q.get('type','mcq')==question_type][:question_count]
+        for q in detail['questions']:
+            if q.get('type')=='mcq':
+                q['options']=[re.sub(r'^\s*(?:[A-Da-d][.)]|\([A-Da-d]\))\s+','',option).strip() for option in q['options']]
+                if any(not o for o in q['options']) or len({o.casefold() for o in q['options']})!=4:raise VisionError('The model returned invalid or duplicate choices. Try generating one question.')
         count=response.get('eval_count',0);duration=response.get('eval_duration',0)/1e9
         detail['performance']={'elapsed_seconds':round(time.monotonic()-started,1),'tokens_per_second':round(count/duration,1) if duration else None,'load_seconds':round(response.get('load_duration',0)/1e9,1),'prompt_seconds':round(response.get('prompt_eval_duration',0)/1e9,1)}
         return detail

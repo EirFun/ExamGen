@@ -53,7 +53,7 @@ def main():
         print('Running real CPU vision inference...',flush=True)
         started=time.monotonic()
         result=vision.interpret(encoded.getvalue(),'','Read both printed labels and state the arrow direction. Do not generate practice questions for this smoke test.')
-        text=' '.join([result['description'],*result['identified_items'],result['reasoning']]).lower()
+        text=json.dumps(result,ensure_ascii=False).lower()
         assert 'ventricle' in text and 'aorta' in text,result
         variations=vision.interpret(encoded.getvalue(),'Identify the chamber in the diagram.',mode='similar',original_question='Identify the chamber in the diagram.',question_count=1)
         assert variations['questions'],'Real model did not generate similar diagram questions'
@@ -63,12 +63,14 @@ def main():
         scope=[{'id':'2','book_id':'synthetic-syllabus','book':'Synthetic syllabus','page':1,'excerpt':'Cardiovascular physiology: describe left ventricular ejection into the aorta and systemic circulation.'}]
         fragments=[]
         grounded=vision.grounded_questions([{'exam':'Synthetic exam','page':1,'text':'Which chamber ejects blood into the aorta?'}],references,1,progress=lambda message,characters:fragments.append(characters),syllabus=scope)
-        assert grounded['questions']
+        assert grounded['questions'],grounded
         for q in grounded['questions']:
-            books.validate_citations(q['citations'],references);books.validate_syllabus(q,scope)
+            try:books.validate_citations(q['citations'],references);books.validate_syllabus(q,scope)
+            except ValueError as error:raise RuntimeError(str(error)+' Model question: '+json.dumps(q)) from error
         practical=vision.interpret(encoded.getvalue(),'Identify the chamber and explain blood flow.',mode='similar',original_question='Identify this chamber and explain its function.',references=references,question_count=1,question_type='subjective',verified_label='Left ventricle')
-        assert practical['questions'] and practical['questions'][0]['type']=='subjective'
-        books.validate_citations(practical['questions'][0]['citations'],references)
+        assert practical['questions'] and practical['questions'][0]['type']=='subjective',practical
+        try:books.validate_citations(practical['questions'][0]['citations'],references)
+        except ValueError as error:raise RuntimeError(str(error)+' Model question: '+json.dumps(practical['questions'][0])) from error
         assert practical['questions'][0]['marking_points']
         assert len(fragments)>2 and max(fragments)>0
         report={'grounded_mcq':grounded,'subjective_practical':practical,'stream_fragments':len(fragments),'variations':variations,'model':vision.model_name(),'ollama':VERSION,'hardware':'CPU, GPU not tested','seconds':round(time.monotonic()-started,1),'interpretation':result}

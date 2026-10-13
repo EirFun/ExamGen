@@ -130,3 +130,11 @@ def test_streamed_progress_gpu_and_model_choice(client,ollama,monkeypatch):
     monkeypatch.setenv('EXAMGEN_VISION_MODEL',vision.DEFAULT_MODEL)
     assert client.patch('/api/vision/model',json={'model':'qwen2.5vl:7b'}).status_code==200
     assert vision.model_name()=='qwen2.5vl:7b'
+
+def test_model_option_prefixes_removed_before_shuffling(client,ollama):
+    _,settings=ollama;source=paper(client);reply=copy.deepcopy(RESULT)
+    reply['questions'][0]['options']=[f'{letter}. {option}' for letter,option in zip('ABCD',reply['questions'][0]['options'])]
+    settings['reply']=reply
+    assert finish(client,client.post(f'/api/papers/{source}/vision',json={'pages':[1]}).json())['state']=='completed'
+    q=client.get(f'/api/papers/{source}/visuals').json()['results'][0]['questions'][0]
+    assert q['options']==RESULT['questions'][0]['options'] and q['answer']==0
