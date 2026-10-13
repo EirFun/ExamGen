@@ -312,8 +312,8 @@ def generate_grounded(request:GroundedRequest):
     page_context={}
     for row in reviewed_pages:
         detail=json.loads(row['result'])
-        if set(request.topics).intersection(t.strip() for t in detail.get('topics',[])):
-            page_context[(row['paper_id'],row['page'])]=detail.get('verified_label','')+' '+detail['description']
+        if not request.topics or set(request.topics).intersection(t.strip() for t in detail.get('topics',[])):
+            page_context[(row['paper_id'],row['page'])]=detail.get('verified_label','').strip() or detail['description']
     examples=[]
     for paper in rows:
         for page,text in enumerate(json.loads(paper['extracted']),1):

@@ -184,6 +184,7 @@ def test_grounded_theory_uses_reviewed_visual_topics_for_focus(client,ollama):
     job=finish(client,client.post(f'/api/papers/{source}/vision',json={'pages':[1],'verified_label':'Left ventricle'}).json())
     assert job['state']=='completed'
     client.patch(f'/api/papers/{source}/visuals/1',json={'reviewed':True})
-    response=client.post('/api/exams/grounded',json={'count':1,'topics':['Cardiovascular physiology']})
-    assert response.status_code==200,response.text
-    assert finish(client,response.json())['state']=='completed'
+    for topics in ([],['Cardiovascular physiology']):
+        response=client.post('/api/exams/grounded',json={'count':1,'topics':topics})
+        assert response.status_code==200,response.text
+        assert finish(client,response.json())['state']=='completed'
