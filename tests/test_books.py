@@ -144,3 +144,21 @@ def test_confirmed_label_drives_book_retrieval(client,ollama):
     response=client.post(f'/api/papers/{source}/vision',json={'pages':[1],'mode':'similar','region':[.1,.1,.5,.5],'original_question':'Identify the pointed structure.','verified_label':'Left ventricle','use_books':True})
     job=finish(client,response.json());assert job['state']=='completed',job
     assert client.get(f'/api/papers/{source}/visuals').json()['results'][0]['questions'][0]['book_sources']
+
+def test_source_ids_and_correct_option_replace_model_index(client,ollama):
+    _,settings=ollama;source=paper(client);book=add(client,'book',BOOK);scope=add(client,'syllabus',SCOPE)
+    result=grounded_reply(client,settings)
+    book_source=client.get('/api/books/search',params={'query':'left ventricle'}).json()['sources'][0]
+    with app.connect() as db:scope_id=str(db.execute('SELECT rowid FROM book_chunks WHERE book_id=?',(scope,)).fetchone()[0])
+    q=result['questions'][0];q['correct_answer']='Left ventricle';q['answer']=1;q['citations']=[{'source_id':book_source['id']}];q['syllabus_source_id']=scope_id
+    response=client.post(f'/api/papers/{source}/vision',json={'pages':[1],'mode':'similar','region':[.1,.1,.5,.5],'original_question':'Explain left ventricle ejection into the aorta.','use_books':True,'syllabus_id':scope})
+    job=finish(client,response.json());assert job['state']=='completed',job
+    question=client.get(f'/api/papers/{source}/visuals').json()['results'][0]['questions'][0]
+    assert question['answer']==0 and question['book_sources'][0]['quote']==BOOK
+    assert question['syllabus_source']['quote']==SCOPE
+    client.patch(f'/api/papers/{source}/visuals/1',json={'reviewed':True})
+    exam=client.post('/api/exams',json={'include_visual':True,'count':1}).json()
+    assert 'correct_answer' not in exam['questions'][0] and 'syllabus_source' not in exam['questions'][0]
+    q['correct_answer']='A nonexistent answer'
+    job=finish(client,client.post(f'/api/papers/{source}/vision',json={'pages':[1]}).json())
+    assert job['state']=='failed' and 'does not match' in job['message']

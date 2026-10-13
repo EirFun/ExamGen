@@ -65,13 +65,14 @@ def main():
         grounded=vision.grounded_questions([{'exam':'Synthetic exam','page':1,'text':'Which chamber ejects blood into the aorta?'}],references,1,progress=lambda message,characters:fragments.append(characters),syllabus=scope)
         assert grounded['questions'],grounded
         for q in grounded['questions']:
-            try:books.validate_citations(q['citations'],references);books.validate_syllabus(q,scope)
+            try:q['book_sources']=books.validate_citations(q['citations'],references);books.validate_syllabus(q,scope)
             except ValueError as error:raise RuntimeError(str(error)+' Model question: '+json.dumps(q)) from error
         practical=vision.interpret(encoded.getvalue(),'Identify the chamber and explain blood flow.',mode='similar',original_question='Identify this chamber and explain its function.',references=references,question_count=1,question_type='subjective',verified_label='Left ventricle')
         assert practical['questions'] and practical['questions'][0]['type']=='subjective',practical
-        try:books.validate_citations(practical['questions'][0]['citations'],references)
+        try:practical['questions'][0]['book_sources']=books.validate_citations(practical['questions'][0]['citations'],references)
         except ValueError as error:raise RuntimeError(str(error)+' Model question: '+json.dumps(practical['questions'][0])) from error
         assert practical['questions'][0]['marking_points']
+        assert grounded['questions'][0]['options'][grounded['questions'][0]['answer']]==grounded['questions'][0]['correct_answer']
         assert len(fragments)>2 and max(fragments)>0
         report={'grounded_mcq':grounded,'subjective_practical':practical,'stream_fragments':len(fragments),'variations':variations,'model':vision.model_name(),'ollama':VERSION,'hardware':'CPU, GPU not tested','seconds':round(time.monotonic()-started,1),'interpretation':result}
         Path('build/local-vision-smoke.json').write_text(json.dumps(report,indent=2))

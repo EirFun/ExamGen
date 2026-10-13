@@ -294,7 +294,7 @@ def generate(request: ExamRequest):
     exam_id = uuid.uuid4().hex
     with connect() as db:
         db.execute('INSERT INTO exams VALUES (?,?,?)', (exam_id, json.dumps(chosen), datetime.now(timezone.utc).isoformat()))
-    return {'id': exam_id, 'questions': [{k: v for k, v in q.items() if k not in ('answer','answer_text','marking_points','explanation','book_sources','citations')} for q in chosen], 'requested': request.count, 'actual': len(chosen), 'demo': request.demo, 'note': 'Practice questions from the included medical bank and, when enabled, reviewed local vision drafts. Check visual answers against the source. No duplicate questions within an exam.'}
+    return {'id': exam_id, 'questions': [{k: v for k, v in q.items() if k not in ('answer','correct_answer','syllabus_source','syllabus_quote','syllabus_source_id','answer_text','marking_points','explanation','book_sources','citations')} for q in chosen], 'requested': request.count, 'actual': len(chosen), 'demo': request.demo, 'note': 'Practice questions from the included medical bank and, when enabled, reviewed local vision drafts. Check visual answers against the source. No duplicate questions within an exam.'}
 
 class GroundedRequest(BaseModel):
     syllabus_id:str|None=Field(default=None,max_length=40)
@@ -375,7 +375,7 @@ def accept_grounded(job_id:str):
         chosen.append({**q,'options':[v for _,v in options],'answer':next(i for i,(old,_) in enumerate(options) if old==q['answer']),'origin':'local model, book-grounded, reviewed'})
     exam_id=uuid.uuid4().hex
     with connect() as db:db.execute('INSERT INTO exams VALUES (?,?,?)',(exam_id,json.dumps(chosen),datetime.now(timezone.utc).isoformat()))
-    result={'id':exam_id,'questions':[{k:v for k,v in q.items() if k not in ('answer','answer_text','marking_points','explanation','book_sources','citations')} for q in chosen],'requested':job['draft']['requested'],'actual':len(chosen),'demo':False,'note':'Questions drafted from exam style examples; answers use reviewed quotations from your books. No external service was used.'}
+    result={'id':exam_id,'questions':[{k:v for k,v in q.items() if k not in ('answer','correct_answer','syllabus_source','syllabus_quote','syllabus_source_id','answer_text','marking_points','explanation','book_sources','citations')} for q in chosen],'requested':job['draft']['requested'],'actual':len(chosen),'demo':False,'note':'Questions drafted from exam style examples; answers use reviewed quotations from your books. No external service was used.'}
     vision_jobs.update(job_id,accepted=result)
     return result
 

@@ -25,7 +25,8 @@ def retrieve(db,query,limit=3,kind="book",document_id=None):
 def validate_citations(citations,passages):
     allowed={p['id']:p for p in passages};verified=[]
     for citation in citations:
-        source=allowed.get(citation['source_id']);quote=citation['quote'].strip()
+        source=allowed.get(citation['source_id']);quote=citation.get('quote','').strip()
+        if source and not quote:quote=source['excerpt']
         if not source or len(quote)<15 or ' '.join(quote.split()).casefold() not in ' '.join(source['excerpt'].split()).casefold():
             raise ValueError('The model supplied a citation that does not match a retrieved book passage. Try a more specific topic or a different book section.')
         verified.append({**source,'quote':quote})
@@ -42,6 +43,11 @@ def syllabus_sources(db,syllabus_id,query):
 
 def validate_syllabus(question,sources):
     if not sources:return
+    source_id=question.pop('syllabus_source_id','')
+    if source_id:
+        source=next((s for s in sources if s['id']==source_id),None)
+        if not source:raise ValueError('The model selected an unknown syllabus objective.')
+        question.pop('syllabus_quote',None);question['syllabus_source']={**source,'quote':source['excerpt']};return
     quote=question.pop('syllabus_quote','').strip()
     if len(quote)<10:raise ValueError('The model did not identify a syllabus objective for this question.')
     source=next((s for s in sources if ' '.join(quote.split()).casefold() in ' '.join(s['excerpt'].split()).casefold()),None)
