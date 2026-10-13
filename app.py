@@ -328,7 +328,7 @@ def generate_grounded(request:GroundedRequest):
             if vision_jobs.get(job_id)['cancelled']:return
             example=examples[(offset//3)%len(examples)]
             vision_jobs.update(job_id,message='Finding book passages for exam examples…',response_chars=0)
-            query=example['text']+' '+' '.join(request.topics)
+            query=example.get('verified_label','')+' '+example['text']+' '+' '.join(request.topics)
             with connect() as db:references=books.retrieve(db,query,limit=2)
             try:
                 with connect() as db:scope=books.syllabus_sources(db,request.syllabus_id,query)
@@ -510,9 +510,9 @@ def analyze_visuals(paper_id:str,request:VisionRequest):
             try:
                 image=vision.render_page(paper['pdf_bytes'],page,request.region,max_side=768 if request.speed=="fast" else 1120)
                 references=[]
-                with connect() as db:scope=books.syllabus_sources(db,request.syllabus_id,request.original_question+' '+request.question+' '+texts[page-1][:1600])
+                with connect() as db:scope=books.syllabus_sources(db,request.syllabus_id,request.verified_label+' '+request.original_question+' '+request.question+' '+texts[page-1][:1600])
                 if request.use_books:
-                    with connect() as db:references=books.retrieve(db,request.original_question+' '+request.question+' '+texts[page-1][:1600],limit=2)
+                    with connect() as db:references=books.retrieve(db,request.verified_label+' '+request.original_question+' '+request.question+' '+texts[page-1][:1600],limit=2)
                     if not references:raise vision.VisionError('No relevant book passages found. Enter the topic or paste the original question.')
                 detail=vision.interpret(image,texts[page-1],request.question,mode=request.mode,original_question=request.original_question,references=references,question_count=request.question_count,question_type=request.question_type,syllabus=scope,verified_label=request.verified_label,progress=lambda message,chars:vision_jobs.update(job_id,message=f'Page {page}: {message}',response_chars=chars))
                 for q in detail['questions']:books.validate_syllabus(q,scope)

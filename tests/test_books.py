@@ -138,3 +138,9 @@ def test_model_option_prefixes_removed_before_shuffling(client,ollama):
     assert finish(client,client.post(f'/api/papers/{source}/vision',json={'pages':[1]}).json())['state']=='completed'
     q=client.get(f'/api/papers/{source}/visuals').json()['results'][0]['questions'][0]
     assert q['options']==RESULT['questions'][0]['options'] and q['answer']==0
+
+def test_confirmed_label_drives_book_retrieval(client,ollama):
+    _,settings=ollama;source=paper(client);add(client,'book',BOOK);grounded_reply(client,settings)
+    response=client.post(f'/api/papers/{source}/vision',json={'pages':[1],'mode':'similar','region':[.1,.1,.5,.5],'original_question':'Identify the pointed structure.','verified_label':'Left ventricle','use_books':True})
+    job=finish(client,response.json());assert job['state']=='completed',job
+    assert client.get(f'/api/papers/{source}/visuals').json()['results'][0]['questions'][0]['book_sources']
