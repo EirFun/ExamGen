@@ -170,3 +170,11 @@ def test_missing_correct_answer_is_rejected(client,ollama):
     result['questions'][0].pop('correct_answer');settings['reply']=result
     job=finish(client,client.post(f'/api/papers/{source}/vision',json={'pages':[1]}).json())
     assert job['state']=='failed' and 'omitted the correct option' in job['message']
+
+def test_copied_original_question_is_rewritten_once_then_rejected(client,ollama):
+    calls,settings=ollama;source=paper(client);result=copy.deepcopy(RESULT)
+    original='Identify the chamber in the diagram.';result['questions'][0]['stem']=original;settings['reply']=result
+    response=client.post(f'/api/papers/{source}/vision',json={'pages':[1],'mode':'similar','region':[.1,.1,.5,.5],'original_question':original})
+    job=finish(client,response.json());assert job['state']=='failed'
+    assert len([body for path,body in calls if path=='/api/chat'])==2
+    assert not client.get(f'/api/papers/{source}/visuals').json()['results']

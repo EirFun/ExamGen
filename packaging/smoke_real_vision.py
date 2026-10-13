@@ -66,7 +66,7 @@ def main():
         assert 'ventricle' in text and 'aorta' in text,result
         STAGE='generate a new diagram question'
         variations=vision.interpret(encoded.getvalue(),'Identify the chamber in the diagram.',mode='similar',original_question='Identify the chamber in the diagram.',question_count=1)
-        assert variations['questions'],'Real model did not generate similar diagram questions'
+        assert variations['questions'],variations
         for item in variations['questions']:
             assert item['stem'].strip().lower()!='identify the chamber in the diagram.',{'copied_original_question':item}
         references=[{'id':'1','book_id':'synthetic-book','book':'Synthetic physiology source','page':1,'excerpt':'The left ventricle ejects blood into the aorta, which supplies the systemic circulation. The aorta carries oxygenated blood to the body.'}]

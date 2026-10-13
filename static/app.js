@@ -56,12 +56,13 @@ const drop = $('#dropzone');
 drop.addEventListener('drop', e => uploadFiles([...e.dataTransfer.files]));
 async function uploadFiles(files) {
   if (uploading || !files.length) return;
+  const uploadKind=libraryKind;
   uploading = true; $('#pdf-input').disabled = true;
   const errors = []; let added = 0;
   for (const [i,file] of files.entries()) {
     notify(`Reading ${file.name} (${i+1} of ${files.length})… Scanned pages are recognized automatically; this can take a few minutes.`);
-    if (file.size > (libraryKind==='book'?60:20) * 1024 * 1024) { errors.push(`${file.name}: exceeds ${libraryKind==='book'?60:20} MB.`); continue; }
-    const form = new FormData(); form.append('file',file);form.append('kind',libraryKind);
+    if (file.size > (uploadKind==='book'?60:20) * 1024 * 1024) { errors.push(`${file.name}: exceeds ${uploadKind==='book'?60:20} MB.`); continue; }
+    const form = new FormData(); form.append('file',file);form.append('kind',uploadKind);
     try { await api('/papers',{method:'POST',body:form}); added++; } catch(e) { errors.push(`${file.name}: ${e.message}`); }
   }
   try { await refresh(); } catch(e) { errors.push(e.message); }

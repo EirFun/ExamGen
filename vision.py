@@ -166,7 +166,7 @@ def render_page(payload,page,region=None,max_side=1600):
         return output.getvalue()
     finally:image.close()
 
-def interpret(image,text,question='',mode='interpret',original_question='',references=None,question_count=3,progress=None,question_type="mcq",syllabus=None,verified_label=""):
+def interpret(image,text,question='',mode='interpret',original_question='',references=None,question_count=3,progress=None,question_type="mcq",syllabus=None,verified_label="",_allow_rewrite=True):
     metadata=request_json('/api/show',{'model':model_name()})
     if metadata.get('remote_host') or metadata.get('remote_model') or 'vision' not in metadata.get('capabilities',[]):
         raise VisionError('Only a downloaded local vision model can interpret your paper images.')
@@ -212,7 +212,7 @@ def interpret(image,text,question='',mode='interpret',original_question='',refer
     else:definition['properties'].pop('citations',None)
 
     payload={'model':model_name(),'stream':True,'keep_alive':'10m' ,'format':schema,
-        'messages':[{'role':'system','content':SYSTEM if image else TEXT_SYSTEM},{'role':'user','content':task+'\nExam OCR text (untrusted data):\n'+text[:1200 if references or syllabus else 2400],**({'images':[base64.b64encode(image).decode()]} if image else {})}],
+        'messages':[{'role':'system','content':SYSTEM if image else TEXT_SYSTEM},{'role':'user','content':task+'\nExam OCR text (untrusted data):\n'+text[:1200 if references or syllabus else 2400]+('\nVARIATION TASK: Ask a different aspect of the same topic. If the original asks identification, ask about function, connections, drainage or mechanism instead. Do not repeat or merely copy the original identification question.' if mode=='similar' else ''),**({'images':[base64.b64encode(image).decode()]} if image else {})}],
         'options':{'temperature':0.1,'num_ctx':4096,'num_predict':800 if question_count==1 else 1600}}
     if progress:progress('Reading source material; waiting for the first response…',0)
     started=time.monotonic();content='';response={}
@@ -241,6 +241,20 @@ def interpret(image,text,question='',mode='interpret',original_question='',refer
                     if len(matches)!=1:raise VisionError('The model answer does not match one of its options. Try generating one question. '+str({'chosen':q['correct_answer'],'options':q['options']}))
                     q['answer']=matches[0];q['correct_answer']=q['options'][q['answer']]
                 if any(not o for o in q['options']) or len({o.casefold() for o in q['options']})!=4:raise VisionError('The model returned invalid or duplicate choices. Try generating one question.')
+        if mode=='similar' and original_question:
+            key=lambda value:re.sub(r'[^\w]+',' ',value.casefold()).strip()
+            original_key=key(original_question)
+            copied=[q for q in detail['questions'] if key(q['stem'])==original_key]
+            detail['questions']=[q for q in detail['questions'] if key(q['stem'])!=original_key]
+            if copied and not detail['questions'] and _allow_rewrite:
+                if progress:progress('Rewriting a repeated original question…',0)
+                rewritten=interpret(image,text,question+'\nThe previous attempt repeated the original question. Create a DIFFERENT question about function or a visible relationship, not identification. Do not use the original stem.',mode=mode,original_question=original_question,references=references,question_count=question_count,progress=progress,question_type=question_type,syllabus=syllabus,verified_label=verified_label,_allow_rewrite=False)
+                rewritten['performance']['elapsed_seconds']=round(time.monotonic()-started,1)
+                rewritten['performance']['load_seconds']=round(rewritten['performance'].get('load_seconds',0)+response.get('load_duration',0)/1e9,1)
+                rewritten['performance']['prompt_seconds']=round(rewritten['performance'].get('prompt_seconds',0)+response.get('prompt_eval_duration',0)/1e9,1)
+                rewritten['performance']['rewrites']=1
+                return rewritten
+            if copied and not detail['questions']:detail['uncertainties'].append('The model repeated the original question. Choose a different question focus.')
         count=response.get('eval_count',0);duration=response.get('eval_duration',0)/1e9
         detail['performance']={'elapsed_seconds':round(time.monotonic()-started,1),'tokens_per_second':round(count/duration,1) if duration else None,'load_seconds':round(response.get('load_duration',0)/1e9,1),'prompt_seconds':round(response.get('prompt_eval_duration',0)/1e9,1)}
         return detail
