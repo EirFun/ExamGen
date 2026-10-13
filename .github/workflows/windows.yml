@@ -55,3 +55,19 @@ jobs:
         with:
           name: ExamGen-native-Windows-x64
           path: downloads/ExamGen-Windows-x64.zip
+  vision-model:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Run real local vision model on CPU
+        run: python packaging/smoke_real_vision.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Local-vision-smoke-report
+          path: build/local-vision-smoke.json

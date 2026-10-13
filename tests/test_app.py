@@ -11,9 +11,10 @@ import app as module
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(module, 'DB', tmp_path / 'test.sqlite3')
+    module.initialize_database()
     with module.connect() as db:
-        db.execute('CREATE TABLE papers (id TEXT PRIMARY KEY, digest TEXT UNIQUE, name TEXT, pages INTEGER, extracted TEXT, created TEXT, ocr_pages INTEGER NOT NULL DEFAULT 0)')
-        db.execute('CREATE TABLE exams (id TEXT PRIMARY KEY, questions TEXT, created TEXT)')
+        db.execute('CREATE TABLE IF NOT EXISTS papers (id TEXT PRIMARY KEY, digest TEXT UNIQUE, name TEXT, pages INTEGER, extracted TEXT, created TEXT, ocr_pages INTEGER NOT NULL DEFAULT 0)')
+        db.execute('CREATE TABLE IF NOT EXISTS exams (id TEXT PRIMARY KEY, questions TEXT, created TEXT)')
     with TestClient(module.app) as client:
         yield client
 

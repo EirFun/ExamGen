@@ -1,11 +1,12 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state = {papers: [], topics: []}, exam = null, answers = {}, result = null, uploading = false;
-const labels = {overview:'Overview', papers:'Past-paper library', topics:'Topic insights', exam:'Mock exam studio'};
+const labels = {overview:'Overview', papers:'Past-paper library', topics:'Topic insights', vision:'Diagram lab', exam:'Mock exam studio'};
 function view(name) {
   document.querySelectorAll('.view').forEach(el => el.hidden = el.id !== name);
   document.querySelectorAll('.nav').forEach(el => el.classList.toggle('active', el.dataset.view === name));
   $('#breadcrumb').textContent = labels[name];
+  if (name === 'vision' && typeof refreshVision === 'function') refreshVision();
   window.scrollTo({top:0, behavior:'smooth'});
 }
 document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => view(b.dataset.view));
@@ -28,7 +29,7 @@ async function refresh() {
   $('#stat-passages').textContent = state.matched_passages;
   $('#nav-count').textContent = state.papers.length;
   $('#paper-total').textContent = `${state.papers.length} paper${state.papers.length === 1 ? '' : 's'}`;
-  $('#paper-list').innerHTML = state.papers.length ? state.papers.map(p => `<div class="paper-row"><span class="file-icon">PDF</span><div class="paper-info"><strong>${esc(p.name)}</strong><small>${p.pages} pages${p.ocr_pages ? ` · OCR: ${p.ocr_pages} pages` : ""} · ${p.topics} topics · ${p.matched_passages} matching passages</small></div><button class="delete" data-delete="${p.id}" aria-label="Delete ${esc(p.name)}">Remove</button></div>`).join('') : empty('▤', 'Your library starts here', 'Upload a past paper to begin building your study map.');
+  $('#paper-list').innerHTML = state.papers.length ? state.papers.map(p => `<div class="paper-row"><span class="file-icon">PDF</span><div class="paper-info"><strong>${esc(p.name)}</strong><small>${p.pages} pages${p.ocr_pages ? ` · OCR: ${p.ocr_pages} pages` : ""} · ${p.topics} topics · ${p.matched_passages} matching passages</small></div><button class="text-button" data-vision-paper="${p.id}">Diagrams ↗</button><button class="delete" data-delete="${p.id}" aria-label="Delete ${esc(p.name)}">Remove</button></div>`).join('') : empty('▤', 'Your library starts here', 'Upload a past paper to begin building your study map.');
   document.querySelectorAll('[data-delete]').forEach(b => b.onclick = async () => {
     if (!confirm('Remove this paper and its topic evidence?')) return;
     b.disabled = true;
@@ -37,15 +38,17 @@ async function refresh() {
   $('#top-topics').innerHTML = state.topics.length ? state.topics.slice(0,4).map((t,i) => `<div class="mini-topic"><div><span class="rank">0${i+1}</span><strong>${esc(t.topic)}</strong><small>${t.paper_count} / ${state.papers.length} papers</small></div><div class="bar"><i style="width:${t.coverage}%"></i></div></div>`).join('') : empty('◎','Your patterns are waiting', state.papers.length ? 'No supported medical topics detected. Try papers covering core clinical subjects.' : 'Add past papers to discover the topics worth a closer look.', '<button class="text-button" id="empty-upload">Add your first paper ↗</button>');
   if ($('#empty-upload')) $('#empty-upload').onclick = selectUpload;
   $('#topic-choices').innerHTML = state.topics.length ? state.topics.map(t => `<label><input type="checkbox" value="${esc(t.topic)}">${esc(t.topic)}</label>`).join('') : '<p class="muted">Upload papers to choose focus topics, or try the demo to explore the practice bank.</p>';
-  $('#generate').disabled = !state.topics.length;
+  $('#generate').disabled = !state.topics.length && !$('#include-visual').checked;
   $('#high-yield-list').innerHTML = state.high_yield_questions.length ? state.high_yield_questions.slice(0,10).map(q => `<div class="source"><span class="badge">${q.paper_count > 1 ? 'Recurring passage · ' + q.paper_count + ' papers' : 'Topic found in ' + q.topic_recurrence + ' paper(s)'}</span><p>${esc(q.passage)}</p><small>${q.sources.map(s => esc(s.paper) + ' · page ' + s.page).join(' / ')}</small></div>`).join('') : empty('▤', 'No matching question passages yet', 'Upload your papers to explore questions connected to your recurring topics.');
+  document.querySelectorAll('[data-vision-paper]').forEach(b => b.onclick=()=>openDiagramLab(b.dataset.visionPaper));
+  if (typeof refreshVisionPapers === 'function') refreshVisionPapers();
   renderTopics();
 }
 function renderTopics() {
   const query = $('#topic-search').value.toLowerCase();
   const topics = state.topics.filter(t => (t.topic + t.subject).toLowerCase().includes(query));
   $('#topic-total').textContent = `${topics.length} topics`;
-  $('#topic-list').innerHTML = topics.length ? topics.map((t,i) => `<article class="topic-card"><div class="topic-heading"><span class="rank">${String(i+1).padStart(2,'0')}</span><div class="topic-title"><h3>${esc(t.topic)}</h3><small>${esc(t.subject)}</small></div><span class="badge">${t.paper_count > 1 ? 'Recurring topic' : 'Found in one paper'}</span></div><div class="topic-meta"><span>${t.paper_count} of ${state.papers.length} papers</span><span>${t.mentions} matching passages</span><span>${t.practice_count} practice questions available</span></div><div class="bar"><i style="width:${t.coverage}%"></i></div><details><summary>Explore source evidence (${t.sources.length} excerpts)</summary>${t.sources.map(s => `<div class="source"><strong>${esc(s.paper)} · page ${s.page}</strong><p>${esc(s.excerpt)}</p></div>`).join('')}</details></article>`).join('') : empty('◎',query ? 'No topics match your search' : 'No topic insights yet', query ? 'Try a different topic or subject.' : 'Upload readable medical papers to see recurring topics and the passages behind them.');
+  $('#topic-list').innerHTML = topics.length ? topics.map((t,i) => `<article class="topic-card"><div class="topic-heading"><span class="rank">${String(i+1).padStart(2,'0')}</span><div class="topic-title"><h3>${esc(t.topic)}</h3><small>${esc(t.subject)}</small></div><span class="badge">${t.paper_count > 1 ? 'Recurring topic' : 'Found in one paper'}</span></div><div class="topic-meta"><span>${t.paper_count} of ${state.papers.length} papers</span><span>${t.mentions} matching passages</span><span>${t.practice_count} practice questions available</span></div><div class="bar"><i style="width:${t.coverage}%"></i></div><details><summary>Explore source evidence (${t.sources.length} excerpts)</summary>${t.sources.map(s => `<div class="source"><strong>${esc(s.paper)} · page ${s.page}${s.origin ? ` · ${esc(s.origin)}` : ""}</strong><p>${esc(s.excerpt)}</p></div>`).join('')}</details></article>`).join('') : empty('◎',query ? 'No topics match your search' : 'No topic insights yet', query ? 'Try a different topic or subject.' : 'Upload readable medical papers to see recurring topics and the passages behind them.');
 }
 $('#topic-search').oninput = renderTopics;
 function selectUpload(){view('papers'); $('#pdf-input').click();}
@@ -67,7 +70,7 @@ async function uploadFiles(files) {
     try { await api('/papers',{method:'POST',body:form}); added++; } catch(e) { errors.push(`${file.name}: ${e.message}`); }
   }
   try { await refresh(); } catch(e) { errors.push(e.message); }
-  notify(`${added} paper${added===1?'':'s'} added.${errors.length ? ' ' + errors.join(' ') : ' Your topic insights are ready.'}`, !errors.length);
+  notify(`${added} paper${added===1?'':'s'} added.${errors.length ? ' ' + errors.join(' ') : ' Your paper library and diagram sources are ready.'}`, !errors.length);
   uploading=false; $('#pdf-input').disabled=false;
 }
 function download(name, value) {
@@ -79,17 +82,18 @@ async function generate(demo=false) {
   if (exam && !result && !confirm('Replace your current exam? Your answers will be cleared.')) return;
   $('#generate').disabled=true; $('#demo').disabled=true;
   try {
-    exam = await api('/exams', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({count:Number($('#question-count').value),topics:demo?[]:[...document.querySelectorAll('#topic-choices input:checked')].map(e=>e.value),demo})});
+    exam = await api('/exams', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({count:Number($('#question-count').value),topics:demo?[]:[...document.querySelectorAll('#topic-choices input:checked')].map(e=>e.value),include_visual:!demo && $('#include-visual').checked,demo})});
     answers={};result=null;$('#exam-setup').hidden=true;renderExam();
     notify(`${exam.demo?'Demo practice. ':''}${exam.actual} unique questions generated.${exam.actual<exam.requested ? ' The selected topics have fewer questions than requested; all available items are included.' : ''}`,true);
   } catch(e) { notify(e.message); }
-  finally { $('#generate').disabled=!state.topics.length;$('#demo').disabled=false; }
+  finally { $('#generate').disabled=!state.topics.length && !$('#include-visual').checked;$('#demo').disabled=false; }
 }
+$('#include-visual').onchange=()=>{$('#generate').disabled=!state.topics.length && !$('#include-visual').checked;};
 $('#generate').onclick = () => generate();
 $('#demo').onclick = () => generate(true);
 function renderExam() {
   const questions = result ? result.results : exam.questions;
-  $('#exam-body').innerHTML = `${result ? `<div class="result-summary"><span class="pill">PRACTICE COMPLETE</span><p><strong>${result.percent}%</strong> · ${result.score} of ${result.total} correct</p><p>Review the reasoning below, then return to your source papers.</p></div>` : ''}<div class="exam-bar"><div><strong>${exam.demo?'Demo practice':'Your focused mock exam'}</strong><p class="exam-tag" id="exam-progress">${Object.keys(answers).length} of ${questions.length} answered</p></div><div><button class="text-button" id="new-exam">New exam</button>${result ? '<button class="secondary" id="download-exam">↓ Export answers</button> <button class="secondary" id="print-exam">Print / save PDF</button>' : ''}</div></div>${questions.map((q,i)=>`<article class="panel question"><div class="question-top"><span>QUESTION ${String(i+1).padStart(2,'0')}</span><span>${esc(q.topic)}</span></div><h3>${esc(q.stem)}</h3><div class="options">${q.options.map((o,j)=>`<label class="option ${result ? j===q.answer ? 'right' : j===q.selected ? 'wrong' : '' : ''}"><input type="radio" name="${q.id}" value="${j}" ${answers[q.id]===j?'checked':''} ${result?'disabled':''}><span>${String.fromCharCode(65+j)}.</span><span>${esc(o)}</span>${result && j===q.answer ? '<span style="margin-left:auto">✓</span>' : ''}</label>`).join('')}</div>${result ? `<div class="explanation"><strong>${q.correct?'Correct':q.selected===null?'Unanswered':'Review this one'} · Answer ${String.fromCharCode(65+q.answer)}</strong><br>${esc(q.explanation)}</div>` : ''}</article>`).join('')}${result ? '' : '<button class="primary" id="submit-exam">Finish exam & review answers →</button>'}`;
+  $('#exam-body').innerHTML = `${result ? `<div class="result-summary"><span class="pill">PRACTICE COMPLETE</span><p><strong>${result.percent}%</strong> · ${result.score} of ${result.total} correct</p><p>Review the reasoning below, then return to your source papers.</p></div>` : ''}<div class="exam-bar"><div><strong>${exam.demo?'Demo practice':'Your focused mock exam'}</strong><p class="exam-tag" id="exam-progress">${Object.keys(answers).length} of ${questions.length} answered</p></div><div><button class="text-button" id="new-exam">New exam</button>${result ? '<button class="secondary" id="download-exam">↓ Export answers</button> <button class="secondary" id="print-exam">Print / save PDF</button>' : ''}</div></div>${questions.map((q,i)=>`<article class="panel question"><div class="question-top"><span>QUESTION ${String(i+1).padStart(2,'0')}</span><span>${esc(q.topic)}</span></div><h3>${esc(q.stem)}</h3>${q.image ? `<img class="exam-source-image" src="${esc(q.image)}" alt="Source diagram"><p class="muted">${esc(q.source)} · ${esc(q.origin)}</p>` : ''}<div class="options">${q.options.map((o,j)=>`<label class="option ${result ? j===q.answer ? 'right' : j===q.selected ? 'wrong' : '' : ''}"><input type="radio" name="${q.id}" value="${j}" ${answers[q.id]===j?'checked':''} ${result?'disabled':''}><span>${String.fromCharCode(65+j)}.</span><span>${esc(o)}</span>${result && j===q.answer ? '<span style="margin-left:auto">✓</span>' : ''}</label>`).join('')}</div>${result ? `<div class="explanation"><strong>${q.correct?'Correct':q.selected===null?'Unanswered':'Review this one'} · Answer ${String.fromCharCode(65+q.answer)}</strong><br>${esc(q.explanation)}</div>` : ''}</article>`).join('')}${result ? '' : '<button class="primary" id="submit-exam">Finish exam & review answers →</button>'}`;
   document.querySelectorAll('.question input').forEach(input => input.onchange=()=>{answers[input.name]=Number(input.value);$('#exam-progress').textContent=`${Object.keys(answers).length} of ${questions.length} answered`;});
   $('#new-exam').onclick=()=>{
     if (!result && !confirm('End this practice session? Your answers will be cleared.')) return;

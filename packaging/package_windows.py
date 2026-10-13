@@ -13,12 +13,13 @@ with zipfile.ZipFile(archive) as old,zipfile.ZipFile(temporary,'w',zipfile.ZIP_D
         data=old.read(item.filename)
         if item.filename=='ExamGen/ExamGen.exe':data=exe.read_bytes()
         elif item.filename=='ExamGen/SHA256SUMS.txt':data=(checksum+'  ExamGen.exe\n').encode()
+        elif item.filename=='ExamGen/READ-ME.txt':data=Path('packaging/WINDOWS-README.txt').read_bytes()
         elif item.filename=='ExamGen/BUILD-INFO.json':
             info=json.loads(data);info['executable_sha256']=checksum
-            info['validation']='Built and tested on native Windows: 11 tests plus packaged executable OCR upload under Arabic TEMP/data paths.'
+            info['validation']='Built and tested on native Windows: OCR, local vision integration, privacy guards and packaged executable checks. See GitHub Actions for separate real-model CPU validation.'
             info['python_runtime']={'version':sys.version,'source':'GitHub Actions setup-python Windows x64 runtime'}
             info['ocr_assets']=json.loads(Path('ocr_assets/SOURCES.json').read_text())
-            info['source_hashes']={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [Path('app.py'),Path('bank.py'),Path('desktop.py'),Path('ocr.py'),*sorted(Path('static').iterdir())]}
+            info['source_hashes']={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [Path('app.py'),Path('bank.py'),Path('desktop.py'),Path('ocr.py'),Path('vision.py'),Path('vision_jobs.py'),*sorted(Path('static').iterdir())]}
             info.pop('dependencies',None)
             info['dependencies_lock']='requirements-windows-build.txt'
             data=json.dumps(info,indent=2).encode()
